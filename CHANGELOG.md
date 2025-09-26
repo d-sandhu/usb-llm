@@ -16,3 +16,7 @@ and follows [Semantic Versioning](https://semver.org/).
 - ESLint 9 flat config with `typescript-eslint`
 - Prettier config and `format:check` in scripts
 - CI updated to install with `npm ci` and run `npm run check`
+- Monorepo via npm workspaces `(apps/*, packages/*)`.
+- New workspace: `@usb-llm/launcher` with TS/lint/format checks.
+- Placeholder workspace: `@usb-llm/ui`.
+- CI runs workspace checks.
