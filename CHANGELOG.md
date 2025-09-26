@@ -22,3 +22,4 @@ and follows [Semantic Versioning](https://semver.org/).
 - CI runs workspace checks.
 - Minimal launcher HTTP server (Node core) bound to `127.0.0.1` with strict cache/security headers; endpoints `/` and `/healthz`. Build via `npm run -w apps/launcher build`.
 - Streaming endpoint (SSE) at `POST /api/stream` emitting `meta`, repeated `token` events, and a final `done`. Stubbed generator for now.
+- Upstream streaming client for OpenAI-compatible chat `(/v1/chat/completions with stream: true)`, configurable via `USBLLM_UPSTREAM_URL`, `USBLLM_MODEL`, `USBLLM_TEMPERATURE`; `POST /api/stream` now proxies tokens when upstream is set, else uses the stub.

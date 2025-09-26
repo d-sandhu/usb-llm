@@ -1,5 +1,7 @@
 import http from 'node:http';
 import { URL } from 'node:url';
+import { loadConfig } from './config.js';
+import { streamChat } from './upstream.js';
 
 const HOST = '127.0.0.1';
 const DEFAULT_PORT = Number(process.env.PORT || 17872);
@@ -78,6 +80,8 @@ function sseEnd(res: http.ServerResponse) {
 
 /* ------------------------------ HTTP server ----------------------------- */
 
+const cfg = loadConfig();
+
 const server = http.createServer(async (req, res) => {
   try {
     if (!req.url) {
@@ -109,7 +113,7 @@ const server = http.createServer(async (req, res) => {
 <ul>
   <li><code>GET /</code> — this page</li>
   <li><code>GET /healthz</code> — returns <code>ok</code></li>
-  <li><code>POST /api/stream</code> — SSE stream (stub)</li>
+  <li><code>POST /api/stream</code> — SSE stream (upstream if configured, else stub)</li>
 </ul>
 <p>Bound to <code>127.0.0.1</code> only.</p>`);
     }
@@ -132,12 +136,39 @@ const server = http.createServer(async (req, res) => {
 
       // Start SSE
       sseStart(res);
+
+      // Upstream llama-server path if configured
+      if (cfg.upstreamUrl) {
+        sseEvent(res, 'meta', {
+          source: 'llama-server',
+          url: cfg.upstreamUrl,
+          model: cfg.model,
+          started_at: new Date().toISOString(),
+        });
+        try {
+          for await (const ev of streamChat(cfg, body.prompt)) {
+            if (ev.type === 'delta') {
+              sseEvent(res, 'token', { text: ev.text });
+            } else if (ev.type === 'meta') {
+              sseEvent(res, 'upstream', ev.raw);
+            } else if (ev.type === 'done') {
+              sseEnd(res);
+              break;
+            }
+          }
+        } catch (err) {
+          sseEvent(res, 'error', { message: (err as Error).message });
+          sseEnd(res);
+        }
+        return;
+      }
+
+      // Fallback: deterministic stub for wiring/UI without a model server
       sseEvent(res, 'meta', {
-        model: 'stub-sse',
+        source: 'stub',
         started_at: new Date().toISOString(),
       });
 
-      // Deterministic "draft" just for wiring:
       const draft =
         `Hello,\n\nThanks for your note. Here’s a short first draft based on your prompt:\n\n` +
         body.prompt.slice(0, 200) +
