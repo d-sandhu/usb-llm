@@ -21,3 +21,4 @@ and follows [Semantic Versioning](https://semver.org/).
 - Placeholder workspace: `@usb-llm/ui`.
 - CI runs workspace checks.
 - Minimal launcher HTTP server (Node core) bound to `127.0.0.1` with strict cache/security headers; endpoints `/` and `/healthz`. Build via `npm run -w apps/launcher build`.
+- Streaming endpoint (SSE) at `POST /api/stream` emitting `meta`, repeated `token` events, and a final `done`. Stubbed generator for now.
