@@ -13,8 +13,8 @@ pids
 
 # Coverage / build
 coverage/
-dist/
-build/
+**/dist/
+**/build/
 
 # Node
 node_modules/

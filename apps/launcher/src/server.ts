@@ -7,6 +7,7 @@ const MAX_RETRIES = 10;
 const MAX_BODY_BYTES = 1 * 1024 * 1024; // 1MB safety cap
 
 type JsonDict = Record<string, unknown>;
+type HttpError = Error & { statusCode?: number };
 
 function setSecurityHeaders(res: http.ServerResponse) {
   // Avoid browser/host caching; keep everything ephemeral
@@ -35,8 +36,8 @@ async function readJson<T = JsonDict>(req: http.IncomingMessage): Promise<T> {
     const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer);
     total += buf.length;
     if (total > MAX_BODY_BYTES) {
-      const err = new Error('Payload too large');
-      (err as any).statusCode = 413;
+      const err: HttpError = new Error('Payload too large');
+      err.statusCode = 413;
       throw err;
     }
     chunks.push(buf);
@@ -61,7 +62,6 @@ function sseStart(res: http.ServerResponse) {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-store, no-cache, must-revalidate',
     Connection: 'keep-alive',
-    // 'X-Accel-Buffering': 'no' // useful behind proxies; loopback here
   });
 }
 
@@ -122,7 +122,7 @@ const server = http.createServer(async (req, res) => {
       try {
         body = await readJson<StreamReq>(req);
       } catch (e) {
-        const status = (e as any).statusCode ?? 400;
+        const status = (e as HttpError).statusCode ?? 400;
         return sendJson(res, { error: (e as Error).message ?? 'Invalid JSON' }, status);
       }
 
@@ -137,7 +137,7 @@ const server = http.createServer(async (req, res) => {
         started_at: new Date().toISOString(),
       });
 
-      // Very small, deterministic "draft" just for wiring:
+      // Deterministic "draft" just for wiring:
       const draft =
         `Hello,\n\nThanks for your note. Here’s a short first draft based on your prompt:\n\n` +
         body.prompt.slice(0, 200) +
@@ -145,7 +145,6 @@ const server = http.createServer(async (req, res) => {
       const chunks = tokenizeForDemo(draft, body.max_tokens ?? 120);
       const delay = clamp(body.delay_ms ?? 40, 10, 200); // ms per chunk
 
-      // Emit chunks as token events
       let i = 0;
       const tick = setInterval(() => {
         if (i >= chunks.length) {
@@ -155,10 +154,8 @@ const server = http.createServer(async (req, res) => {
         sseEvent(res, 'token', { text: chunks[i++] });
       }, delay);
 
-      // Keepalive ping (prevents some clients from timing out)
       const ping = setInterval(() => sseEvent(res, 'ping', {}), 15000);
 
-      // Cleanup on client disconnect
       req.on('close', () => {
         clearInterval(tick);
         clearInterval(ping);
@@ -172,12 +169,15 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.end('Not Found');
   } catch (err) {
+    // Best-effort error response; ignore write failures but do not leave an empty catch
+    setSecurityHeaders(res);
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
     try {
-      setSecurityHeaders(res);
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ error: 'Internal Server Error' }));
-    } catch {}
+    } catch (writeErr) {
+      console.error('[usb-llm] Failed to write error response:', writeErr);
+    }
     console.error('[usb-llm] Unhandled error:', err);
   }
 });
