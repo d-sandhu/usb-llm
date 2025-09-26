@@ -2,17 +2,14 @@
   "name": "@usb-llm/launcher",
   "version": "0.0.1",
   "private": true,
-  "description": "",
-  "main": "index.js",
-  "devDependencies": {},
+  "type": "module",
+  "main": "dist/server.js",
   "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "check": "npm run typecheck && npm run lint && npm run format:check"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module"
+  }
 }
