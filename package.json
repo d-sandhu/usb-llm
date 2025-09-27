@@ -20,7 +20,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "models:verify": "node scripts/verify-model.mjs",
+    "models:help": "node -e \"console.log('Usage: npm run models:verify -- <path/to/model.gguf>')\""
   },
   "description": "USB-LLM is a plug-and-play offline email-drafting assistant that runs from a USB stick on Windows & macOS. No install. No cloud. v0.1 focuses on Reply, Compose, and Rewrite with tone/length presets and one-click copy.",
   "repository": {
@@ -46,6 +48,7 @@
     "@tsconfig/node22": "^22.0.2",
     "@types/node": "^24.3.0",
     "eslint": "^9.34.0",
+    "globals": "^16.4.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.41.0"

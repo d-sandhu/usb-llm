@@ -25,7 +25,12 @@ and follows [Semantic Versioning](https://semver.org/).
 - Upstream streaming client for OpenAI-compatible chat `(/v1/chat/completions with stream: true)`, configurable via `USBLLM_UPSTREAM_URL`, `USBLLM_MODEL`, `USBLLM_TEMPERATURE`; `POST /api/stream` now proxies tokens when upstream is set, else uses the stub.
 - Optional autostart supervisor: if `USBLLM_UPSTREAM_URL` is not set and `USBLLM_AUTOSTART=1` with `USBLLM_LLAMA_BIN` + `USBLLM_MODEL_FILE`, the launcher starts llama-server, chooses a free port, and proxies `/api/stream` to it. Graceful stop on launcher exit.
 - `docs/USAGE.md`: how to run the launcher in Stub, External Upstream, and Autostart modes with copy-paste examples.
+- `models/registry.json` listing Starter / Standard / Pro model entries (IDs, filenames, licenses, RAM guidance).
+- `scripts/verify-model.mjs` to compute/verify SHA-256 for `.gguf` files.
+- `docs/MODELS.md` with RAM-based guidance and verification steps.
 
 ### Changed
 
 - `README.md`: added Quick Start and a link to the usage guide.
+- `README.md`: link to the models guide.
+- `docs/USAGE.md`: link back to the models guide.
