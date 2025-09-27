@@ -55,6 +55,8 @@ See **[docs/USAGE.md](docs/USAGE.md)** for:
 - **External upstream** (you run `llama-server`)
 - **Autostart** (launcher starts `llama-server` given a binary + model)
 
+See **[docs/MODELS.md](docs/MODELS.md)** to choose and verify a model by RAM tier (Starter / Standard / Pro).
+
 ---
 
 ## Versioning

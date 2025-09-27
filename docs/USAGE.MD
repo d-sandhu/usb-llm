@@ -238,3 +238,5 @@ Health now shows:
   ```
 
 - **Upstream:** a local model server (e.g., `llama-server`) with an OpenAI-compatible chat API at `/v1/chat/completions` supporting `stream: true`.
+
+**Choosing a model?** See **[docs/MODELS.md](./MODELS.md)**.

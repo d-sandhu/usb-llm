@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "starter-phi3-mini-q4_k_m",
+      "name": "Starter — Phi-3 Mini Instruct (Q4_K_M)",
+      "file": "phi-3-mini-instruct-q4_k_m.gguf",
+      "license": "MIT",
+      "context": 4096,
+      "quant": "Q4_K_M",
+      "min_ram_gb": 4,
+      "recommended_ram_gb": 8,
+      "notes": "Runs on most laptops; best reach vs size. Great default if unsure.",
+      "sha256": ""
+    },
+    {
+      "id": "standard-mistral-7b-q4_k_m",
+      "name": "Standard — Mistral 7B Instruct (Q4_K_M)",
+      "file": "mistral-7b-instruct-q4_k_m.gguf",
+      "license": "Apache-2.0",
+      "context": 8192,
+      "quant": "Q4_K_M",
+      "min_ram_gb": 8,
+      "recommended_ram_gb": 16,
+      "notes": "Better phrasing; typical modern laptops are fine.",
+      "sha256": ""
+    },
+    {
+      "id": "pro-qwen2_5-7b-q4_k_m",
+      "name": "Pro — Qwen2.5 7B Instruct (Q4_K_M)",
+      "file": "qwen2.5-7b-instruct-q4_k_m.gguf",
+      "license": "Apache-2.0",
+      "context": 8192,
+      "quant": "Q4_K_M",
+      "min_ram_gb": 12,
+      "recommended_ram_gb": 16,
+      "notes": "Best quality in this size; prefers ≥16 GB RAM.",
+      "sha256": ""
+    }
+  ]
+}

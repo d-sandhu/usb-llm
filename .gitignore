@@ -29,3 +29,9 @@ Thumbs.db
 # Env
 .env
 .env.*
+
+# model weights (never commit)
+*.gguf
+models/*.gguf
+bin/llama-server
+bin/llama-server.exe
