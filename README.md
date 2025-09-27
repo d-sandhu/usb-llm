@@ -49,6 +49,8 @@ curl -N -H "Content-Type: application/json" \
   http://127.0.0.1:17872/api/stream
 ```
 
+UI (dev): `npm run -w apps/ui dev` → <http://127.0.0.1:5173>
+
 See **[docs/USAGE.md](docs/USAGE.md)** for:
 
 - **Stub mode** (no model required)

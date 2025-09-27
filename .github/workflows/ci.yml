@@ -1,5 +1,4 @@
-# .github/workflows/ci.yml
-name: ci
+name: CI
 on:
   pull_request:
   push:
@@ -13,15 +12,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
+
       - run: npm ci
-      - run: npm run check
-      - run: npm run check:workspaces
+
+      - run: npm run check:all
+
       - run: npm run -w apps/launcher build

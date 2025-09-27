@@ -15,7 +15,7 @@
     "build": "node -e \"console.log('build ok')\"",
     "test": "node -e \"console.log('tests ok')\"",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
-    "check:workspaces": "npm run -ws --if-present check",
+    "check:workspaces": "npm run --workspaces --if-present check",
     "check:all": "npm run check && npm run check:workspaces",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",

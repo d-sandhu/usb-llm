@@ -28,9 +28,13 @@ and follows [Semantic Versioning](https://semver.org/).
 - `models/registry.json` listing Starter / Standard / Pro model entries (IDs, filenames, licenses, RAM guidance).
 - `scripts/verify-model.mjs` to compute/verify SHA-256 for `.gguf` files.
 - `docs/MODELS.md` with RAM-based guidance and verification steps.
+- `apps/ui`: React 19.1 + Vite 7 app streaming via `@microsoft/fetch-event-source`; dev proxy to launcher.
+- CI now runs `check:all` (root + all workspaces).
 
 ### Changed
 
 - `README.md`: added Quick Start and a link to the usage guide.
 - `README.md`: link to the models guide.
 - `docs/USAGE.md`: link back to the models guide.
+- Root scripts: use `--workspaces` for workspace checks.
+- Prettier: ignore build artifacts in `apps/launcher` and `apps/ui`.
