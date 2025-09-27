@@ -2,6 +2,7 @@ import http from 'node:http';
 import { URL } from 'node:url';
 import { loadConfig } from './config.js';
 import { streamChat } from './upstream.js';
+import { ensureStarted, currentUrl, stop as stopLlama } from './llamaProc.js';
 
 const HOST = '127.0.0.1';
 const DEFAULT_PORT = Number(process.env.PORT || 17872);
@@ -12,12 +13,9 @@ type JsonDict = Record<string, unknown>;
 type HttpError = Error & { statusCode?: number };
 
 function setSecurityHeaders(res: http.ServerResponse) {
-  // Avoid browser/host caching; keep everything ephemeral
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-
-  // Lock down page / same-origin
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; base-uri 'none'; frame-ancestors 'none'"
@@ -26,7 +24,7 @@ function setSecurityHeaders(res: http.ServerResponse) {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-  res.setHeader('Permissions-Policy', ''); // deny all by default
+  res.setHeader('Permissions-Policy', '');
 }
 
 /* ----------------------------- JSON helpers ----------------------------- */
@@ -58,7 +56,6 @@ function sendJson(res: http.ServerResponse, body: unknown, status = 200) {
 /* --------------------------- SSE (Server Events) ------------------------ */
 
 function sseStart(res: http.ServerResponse) {
-  // Set security + SSE-specific headers
   setSecurityHeaders(res);
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -68,7 +65,6 @@ function sseStart(res: http.ServerResponse) {
 }
 
 function sseEvent(res: http.ServerResponse, event: string, data: unknown) {
-  // SSE frame: event + data + blank line
   res.write(`event: ${event}\n`);
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
@@ -90,15 +86,22 @@ const server = http.createServer(async (req, res) => {
     }
     const url = new URL(req.url, `http://${HOST}`);
 
-    // Health
+    // health
     if (req.method === 'GET' && url.pathname === '/healthz') {
       setSecurityHeaders(res);
+      const mode = cfg.upstreamUrl
+        ? 'external'
+        : cfg.autostart && cfg.binPath && cfg.modelFile
+          ? currentUrl()
+            ? 'local-ready'
+            : 'local-idle'
+          : 'stub';
       res.statusCode = 200;
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      return void res.end('ok');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return void res.end(JSON.stringify({ ok: true, mode }));
     }
 
-    // Root
+    // home
     if (req.method === 'GET' && url.pathname === '/') {
       setSecurityHeaders(res);
       res.statusCode = 200;
@@ -112,15 +115,14 @@ const server = http.createServer(async (req, res) => {
 <h1>USB-LLM launcher is running</h1>
 <ul>
   <li><code>GET /</code> — this page</li>
-  <li><code>GET /healthz</code> — returns <code>ok</code></li>
-  <li><code>POST /api/stream</code> — SSE stream (upstream if configured, else stub)</li>
+  <li><code>GET /healthz</code> — JSON health (stub/external/local)</li>
+  <li><code>POST /api/stream</code> — SSE stream</li>
 </ul>
 <p>Bound to <code>127.0.0.1</code> only.</p>`);
     }
 
-    // Streaming endpoint (SSE): POST /api/stream
+    // streaming
     if (req.method === 'POST' && url.pathname === '/api/stream') {
-      // Expect JSON: { prompt: string, max_tokens?: number, delay_ms?: number }
       type StreamReq = { prompt?: string; max_tokens?: number; delay_ms?: number };
       let body: StreamReq;
       try {
@@ -129,15 +131,13 @@ const server = http.createServer(async (req, res) => {
         const status = (e as HttpError).statusCode ?? 400;
         return sendJson(res, { error: (e as Error).message ?? 'Invalid JSON' }, status);
       }
-
       if (!body.prompt || typeof body.prompt !== 'string') {
         return sendJson(res, { error: '`prompt` is required (string)' }, 400);
       }
 
-      // Start SSE
       sseStart(res);
 
-      // Upstream llama-server path if configured
+      // 1) If external upstream is configured, proxy via upstream client
       if (cfg.upstreamUrl) {
         sseEvent(res, 'meta', {
           source: 'llama-server',
@@ -147,11 +147,9 @@ const server = http.createServer(async (req, res) => {
         });
         try {
           for await (const ev of streamChat(cfg, body.prompt)) {
-            if (ev.type === 'delta') {
-              sseEvent(res, 'token', { text: ev.text });
-            } else if (ev.type === 'meta') {
-              sseEvent(res, 'upstream', ev.raw);
-            } else if (ev.type === 'done') {
+            if (ev.type === 'delta') sseEvent(res, 'token', { text: ev.text });
+            else if (ev.type === 'meta') sseEvent(res, 'upstream', ev.raw);
+            else if (ev.type === 'done') {
               sseEnd(res);
               break;
             }
@@ -163,19 +161,44 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // Fallback: deterministic stub for wiring/UI without a model server
-      sseEvent(res, 'meta', {
-        source: 'stub',
-        started_at: new Date().toISOString(),
-      });
+      // 2) If autostart is allowed and binary+model are provided, start local server on demand
+      if (cfg.autostart && cfg.binPath && cfg.modelFile) {
+        sseEvent(res, 'meta', { source: 'supervisor', status: 'starting' });
+        try {
+          const startedUrl = await ensureStarted({
+            binPath: cfg.binPath,
+            modelFile: cfg.modelFile,
+            preferPort: cfg.preferPort,
+          });
+          sseEvent(res, 'meta', { source: 'supervisor', status: 'ready', url: startedUrl });
 
+          // Temporarily proxy using upstream client by pretending cfg has this URL
+          const localCfg = { ...cfg, upstreamUrl: startedUrl };
+          for await (const ev of streamChat(localCfg, body.prompt)) {
+            if (ev.type === 'delta') sseEvent(res, 'token', { text: ev.text });
+            else if (ev.type === 'meta') sseEvent(res, 'upstream', ev.raw);
+            else if (ev.type === 'done') {
+              sseEnd(res);
+              break;
+            }
+          }
+        } catch (err) {
+          sseEvent(res, 'error', {
+            message: (err as Error).message || 'Failed to start local model',
+          });
+          sseEnd(res);
+        }
+        return;
+      }
+
+      // 3) Fallback stub (no upstream, no autostart)
+      sseEvent(res, 'meta', { source: 'stub', started_at: new Date().toISOString() });
       const draft =
         `Hello,\n\nThanks for your note. Here’s a short first draft based on your prompt:\n\n` +
         body.prompt.slice(0, 200) +
         `\n\nBest regards,\nUSB-LLM`;
       const chunks = tokenizeForDemo(draft, body.max_tokens ?? 120);
       const delay = clamp(body.delay_ms ?? 40, 10, 200); // ms per chunk
-
       let i = 0;
       const tick = setInterval(() => {
         if (i >= chunks.length) {
@@ -184,9 +207,7 @@ const server = http.createServer(async (req, res) => {
         }
         sseEvent(res, 'token', { text: chunks[i++] });
       }, delay);
-
       const ping = setInterval(() => sseEvent(res, 'ping', {}), 15000);
-
       req.on('close', () => {
         clearInterval(tick);
         clearInterval(ping);
@@ -194,13 +215,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Fallback
+    // fallback
     setSecurityHeaders(res);
     res.statusCode = 404;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.end('Not Found');
   } catch (err) {
-    // Best-effort error response; ignore write failures but do not leave an empty catch
     setSecurityHeaders(res);
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -214,7 +234,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 function tokenizeForDemo(text: string, maxTokens: number): string[] {
-  // naive "token" splitting: words + small punctuation, then cap token count
   const raw = text
     .replace(/\s+/g, ' ')
     .trim()
@@ -222,7 +241,6 @@ function tokenizeForDemo(text: string, maxTokens: number): string[] {
     .filter(Boolean);
   return raw.slice(0, Math.max(1, maxTokens));
 }
-
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
 }
@@ -245,16 +263,15 @@ function listenWithRetry(port: number, retriesLeft: number) {
     console.log(`[usb-llm] Launcher listening at http://${HOST}:${p}`);
   });
 }
-
 function shutdown() {
   console.log('\n[usb-llm] Shutting down...');
-  server.close(() => {
+  server.close(async () => {
+    await stopLlama().catch(() => {});
     console.log('[usb-llm] Closed.');
     process.exit(0);
   });
   setTimeout(() => process.exit(0), 1500).unref();
 }
-
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
