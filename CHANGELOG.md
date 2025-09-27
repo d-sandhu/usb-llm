@@ -24,3 +24,8 @@ and follows [Semantic Versioning](https://semver.org/).
 - Streaming endpoint (SSE) at `POST /api/stream` emitting `meta`, repeated `token` events, and a final `done`. Stubbed generator for now.
 - Upstream streaming client for OpenAI-compatible chat `(/v1/chat/completions with stream: true)`, configurable via `USBLLM_UPSTREAM_URL`, `USBLLM_MODEL`, `USBLLM_TEMPERATURE`; `POST /api/stream` now proxies tokens when upstream is set, else uses the stub.
 - Optional autostart supervisor: if `USBLLM_UPSTREAM_URL` is not set and `USBLLM_AUTOSTART=1` with `USBLLM_LLAMA_BIN` + `USBLLM_MODEL_FILE`, the launcher starts llama-server, chooses a free port, and proxies `/api/stream` to it. Graceful stop on launcher exit.
+- `docs/USAGE.md`: how to run the launcher in Stub, External Upstream, and Autostart modes with copy-paste examples.
+
+### Changed
+
+- `README.md`: added Quick Start and a link to the usage guide.

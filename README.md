@@ -1,21 +1,79 @@
 # USB-LLM
 
 USB-LLM is a plug-and-play **offline** email-drafting assistant that runs from a **USB stick** on **Windows & macOS**. No install. No cloud.
-v0.1 focuses on three flows: **Reply**, **Compose**, **Rewrite** — plus tone & length presets and one-click copy.
+
+**v0.1 scope:** three flows — **Reply**, **Compose**, **Rewrite** — with tone & length presets and one-click copy.
+
+---
 
 ## Platforms (v0.1)
 
 - Windows portable `.exe`
 - macOS portable `.app` (unsigned)
 
+> Packaging is in progress. For development, the Node launcher runs locally.
+
+---
+
 ## Tech (initial)
 
-React + TypeScript (Vite) UI, a Node launcher packaged as a **single executable** (Node SEA), and a local `llama.cpp` server using **GGUF** models.
+- **Launcher:** Node.js (built-in `http`, zero deps), packaged as a **single executable** (Node SEA).
+- **Model runtime:** local `llama.cpp` **llama-server** with **GGUF** models (OpenAI-compatible API).
+- **UI:** React + TypeScript (Vite) — coming after the launcher foundation.
+
+---
+
+## Quick start (dev)
+
+> Requires **Node 22+**.
+
+```bash
+# from repo root
+npm ci
+npm run -w apps/launcher build
+npm run -w apps/launcher start
+```
+
+Health:
+
+```bash
+curl http://127.0.0.1:17872/healthz
+# => {"ok":true,"mode":"stub"}   # default: no model required
+```
+
+Stream (SSE, stub tokens by default):
+
+```bash
+curl -N -H "Content-Type: application/json" \
+  -d '{"prompt":"Draft a polite follow-up about the Q3 report."}' \
+  http://127.0.0.1:17872/api/stream
+```
+
+See **[docs/USAGE.md](docs/USAGE.md)** for:
+
+- **Stub mode** (no model required)
+- **External upstream** (you run `llama-server`)
+- **Autostart** (launcher starts `llama-server` given a binary + model)
+
+---
 
 ## Versioning
 
-We follow **Semantic Versioning** (MAJOR.MINOR.PATCH). First public cut will be `0.1.0`. Learn more at semver.org.
+We follow **Semantic Versioning** (MAJOR.MINOR.PATCH).  
+First public cut will be **`0.1.0`**. Learn more at <https://semver.org/>.
+
+---
 
 ## License
 
-Code: Apache-2.0 (see `LICENSE`). Model weights keep their original licenses.
+- **Code:** Apache-2.0 (see `LICENSE`)
+- **Models:** keep their original licenses (we’ll document recommended permissive options in a model registry)
+
+---
+
+## Contributing
+
+Small, focused PRs are welcome. Please:
+
+- Keep a clean commit history and update **CHANGELOG.md** under **[Unreleased]**.
+- Ensure `npm run check` (typecheck + lint + format + tests) passes.
