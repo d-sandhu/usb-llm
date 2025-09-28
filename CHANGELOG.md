@@ -30,6 +30,7 @@ and follows [Semantic Versioning](https://semver.org/).
 - `docs/MODELS.md` with RAM-based guidance and verification steps.
 - `apps/ui`: React 19.1 + Vite 7 app streaming via `@microsoft/fetch-event-source`; dev proxy to launcher.
 - CI now runs `check:all` (root + all workspaces).
+- Launcher: `GET /v1/models` stub to prepare a future model selector.
 
 ### Changed
 
@@ -38,3 +39,5 @@ and follows [Semantic Versioning](https://semver.org/).
 - `docs/USAGE.md`: link back to the models guide.
 - Root scripts: use `--workspaces` for workspace checks.
 - Prettier: ignore build artifacts in `apps/launcher` and `apps/ui`.
+- `/healthz` now returns `{ ok, mode, submode }`.
+- Home page lists `/v1/models` and clarifies `/healthz`.

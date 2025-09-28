@@ -33,7 +33,11 @@ async function readJson<T = JsonDict>(req: http.IncomingMessage): Promise<T> {
   let total = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
-    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer);
+    const buf = Buffer.isBuffer(chunk)
+      ? chunk
+      : typeof chunk === 'string'
+        ? Buffer.from(chunk, 'utf8')
+        : Buffer.from(chunk as Uint8Array);
     total += buf.length;
     if (total > MAX_BODY_BYTES) {
       const err: HttpError = new Error('Payload too large');
@@ -89,16 +93,39 @@ const server = http.createServer(async (req, res) => {
     // health
     if (req.method === 'GET' && url.pathname === '/healthz') {
       setSecurityHeaders(res);
-      const mode = cfg.upstreamUrl
+      const submode = cfg.upstreamUrl
         ? 'external'
         : cfg.autostart && cfg.binPath && cfg.modelFile
           ? currentUrl()
             ? 'local-ready'
             : 'local-idle'
-          : 'stub';
+          : null;
+      const mode = submode ? 'upstream' : 'stub';
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      return void res.end(JSON.stringify({ ok: true, mode }));
+      return void res.end(JSON.stringify({ ok: true, mode, submode }));
+    }
+
+    // models (stub)
+    if (req.method === 'GET' && url.pathname === '/v1/models') {
+      setSecurityHeaders(res);
+      const items: Array<{ id: string; label: string; source: 'upstream' | 'local' }> = [];
+      if (cfg.upstreamUrl) {
+        items.push({ id: cfg.model, label: `Upstream: ${cfg.model}`, source: 'upstream' });
+      }
+      if (cfg.autostart && cfg.modelFile) {
+        const name = cfg.modelFile.split(/[\\/]/).pop() || cfg.modelFile;
+        items.push({ id: name, label: `Local: ${name}`, source: 'local' });
+      }
+      const selected = cfg.upstreamUrl
+        ? cfg.model
+        : currentUrl()
+          ? cfg.modelFile?.split(/[\\/]/).pop() || cfg.modelFile || null
+          : null;
+
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return void res.end(JSON.stringify({ data: items, selected }));
     }
 
     // home
@@ -115,7 +142,8 @@ const server = http.createServer(async (req, res) => {
 <h1>USB-LLM launcher is running</h1>
 <ul>
   <li><code>GET /</code> — this page</li>
-  <li><code>GET /healthz</code> — JSON health (stub/external/local)</li>
+  <li><code>GET /healthz</code> — JSON health (mode: stub/upstream, submode detail)</li>
+  <li><code>GET /v1/models</code> — list available models (stubbed)</li>
   <li><code>POST /api/stream</code> — SSE stream</li>
 </ul>
 <p>Bound to <code>127.0.0.1</code> only.</p>`);
@@ -174,13 +202,20 @@ const server = http.createServer(async (req, res) => {
 
           // Temporarily proxy using upstream client by pretending cfg has this URL
           const localCfg = { ...cfg, upstreamUrl: startedUrl };
-          for await (const ev of streamChat(localCfg, body.prompt)) {
-            if (ev.type === 'delta') sseEvent(res, 'token', { text: ev.text });
-            else if (ev.type === 'meta') sseEvent(res, 'upstream', ev.raw);
-            else if (ev.type === 'done') {
-              sseEnd(res);
-              break;
+          try {
+            for await (const ev of streamChat(localCfg, body.prompt)) {
+              if (ev.type === 'delta') sseEvent(res, 'token', { text: ev.text });
+              else if (ev.type === 'meta') sseEvent(res, 'upstream', ev.raw);
+              else if (ev.type === 'done') {
+                sseEnd(res);
+                break;
+              }
             }
+          } catch (err) {
+            sseEvent(res, 'error', {
+              message: (err as Error).message || 'Failed during local upstream stream',
+            });
+            sseEnd(res);
           }
         } catch (err) {
           sseEvent(res, 'error', {
@@ -200,14 +235,15 @@ const server = http.createServer(async (req, res) => {
       const chunks = tokenizeForDemo(draft, body.max_tokens ?? 120);
       const delay = clamp(body.delay_ms ?? 40, 10, 200); // ms per chunk
       let i = 0;
+      const ping = setInterval(() => sseEvent(res, 'ping', {}), 15000);
       const tick = setInterval(() => {
         if (i >= chunks.length) {
           clearInterval(tick);
+          clearInterval(ping);
           return sseEnd(res);
         }
         sseEvent(res, 'token', { text: chunks[i++] });
       }, delay);
-      const ping = setInterval(() => sseEvent(res, 'ping', {}), 15000);
       req.on('close', () => {
         clearInterval(tick);
         clearInterval(ping);
@@ -241,6 +277,7 @@ function tokenizeForDemo(text: string, maxTokens: number): string[] {
     .filter(Boolean);
   return raw.slice(0, Math.max(1, maxTokens));
 }
+
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
 }
@@ -263,6 +300,7 @@ function listenWithRetry(port: number, retriesLeft: number) {
     console.log(`[usb-llm] Launcher listening at http://${HOST}:${p}`);
   });
 }
+
 function shutdown() {
   console.log('\n[usb-llm] Shutting down...');
   server.close(async () => {
