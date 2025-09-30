@@ -1,69 +1,136 @@
-import { useState } from 'react';
-import { fetchEventSource } from '@microsoft/fetch-event-source';
+import { useEffect, useRef, useState } from 'react';
 
-type Status = 'idle' | 'streaming' | 'error';
-
-async function streamDraft(prompt: string, onToken: (t: string) => void, onDone: () => void) {
-  const ctrl = new AbortController();
-
-  await fetchEventSource('/api/stream', {
+async function streamDraft(
+  prompt: string,
+  controller: AbortController,
+  onToken: (t: string) => void
+) {
+  const res = await fetch('/api/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt, max_tokens: 200 }),
-    signal: ctrl.signal,
-
-    async onopen(res) {
-      const ctype = res.headers.get('content-type') ?? '';
-      if (!res.ok || !ctype.includes('text/event-stream')) {
-        throw new Error(`Unexpected response: ${res.status} ${ctype}`);
-      }
-    },
-
-    onmessage(ev) {
-      if (ev.event === 'token') {
-        try {
-          const { text } = JSON.parse(ev.data) as { text?: string };
-          if (text) onToken(text);
-        } catch {
-          /* ignore malformed frames */
-        }
-      } else if (ev.event === 'done') {
-        onDone();
-        ctrl.abort();
-      }
-    },
-
-    onerror(err) {
-      throw err; // surface to caller
-    },
+    signal: controller.signal,
   });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const ctype = res.headers.get('content-type') ?? '';
+  if (!ctype.includes('text/event-stream')) {
+    throw new Error(`Unexpected content-type: ${ctype}`);
+  }
+
+  if (!res.body) return;
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  // Clean up reader when aborted
+  const onAbort = () => {
+    reader.cancel().catch(() => {
+      /* ignore cancel errors */
+    });
+  };
+  controller.signal.addEventListener('abort', onAbort);
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Frames are separated by a blank line
+      let sep: number;
+      while ((sep = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+
+        // Minimal parse: find first "event:" and collect any "data:" lines.
+        let event = 'message';
+        const dataLines: string[] = [];
+        for (const line of frame.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+        }
+        const data = dataLines.join('\n');
+
+        if (event === 'token') {
+          try {
+            const obj = JSON.parse(data) as { text?: string };
+            if (obj.text) onToken(obj.text);
+          } catch {
+            /* ignore */
+          }
+        } else if (event === 'done') {
+          return;
+        }
+      }
+    }
+  } finally {
+    controller.signal.removeEventListener('abort', onAbort);
+  }
 }
 
 function App() {
   const [prompt, setPrompt] = useState('');
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<Status>('idle');
+  const [stopping, setStopping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Derive status message from state
+  const statusMessage = error
+    ? `Error: ${error}`
+    : stopping
+      ? 'Stopping…'
+      : busy
+        ? 'Streaming…'
+        : 'Ready';
+
+  useEffect(() => {
+    // Cleanup on unmount: cancel any in-flight stream
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
-    if (!prompt.trim()) return;
+    // Prevent double-submit if already busy, stopping, or if abort is in-flight
+    if (!prompt.trim() || busy || stopping || abortRef.current) return;
+
     setDraft('');
+    setError(null);
     setBusy(true);
-    setStatus('streaming');
+
+    const ac = new AbortController();
+    abortRef.current = ac;
 
     try {
-      await streamDraft(
-        prompt,
-        (t) => setDraft((d) => d + t),
-        () => setStatus('idle')
-      );
+      await streamDraft(prompt, ac, (t) => setDraft((d) => d + t));
     } catch (err) {
-      console.error(err);
-      setStatus('error');
+      const name = (err as Error)?.name || '';
+      if (name !== 'AbortError') {
+        const message = (err as Error)?.message || 'Unknown error';
+        console.error(err);
+        setError(message);
+      }
     } finally {
       setBusy(false);
+      setStopping(false);
+      abortRef.current = null;
     }
+  }
+
+  function handleStop(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setStopping(true);
+    abortRef.current?.abort();
   }
 
   function handleCopy() {
@@ -94,9 +161,15 @@ function App() {
           disabled={busy}
         />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button type="submit" disabled={busy || !prompt.trim()}>
-            {busy ? 'Generating…' : 'Generate draft'}
-          </button>
+          {!busy ? (
+            <button type="submit" disabled={!prompt.trim()}>
+              Generate draft
+            </button>
+          ) : (
+            <button type="button" onClick={handleStop}>
+              Stop
+            </button>
+          )}
           <button type="button" onClick={() => setPrompt('')} disabled={busy}>
             Clear
           </button>
@@ -119,13 +192,7 @@ function App() {
         <button type="button" onClick={handleCopy} disabled={!draft}>
           Copy to clipboard
         </button>
-        <span style={{ color: status === 'error' ? '#b00' : '#555' }}>
-          {status === 'streaming'
-            ? 'Streaming…'
-            : status === 'error'
-              ? 'Error (see console)'
-              : 'Ready'}
-        </span>
+        <span style={{ color: error ? '#b00' : '#555' }}>{statusMessage}</span>
       </div>
     </div>
   );
