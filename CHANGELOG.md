@@ -41,3 +41,4 @@ and follows [Semantic Versioning](https://semver.org/).
 - Prettier: ignore build artifacts in `apps/launcher` and `apps/ui`.
 - `/healthz` now returns `{ ok, mode, submode }`.
 - Home page lists `/v1/models` and clarifies `/healthz`.
+- UI: switch to native `fetch()` + `AbortController` for SSE streaming; **Stop** now cancels immediately with no auto-retry.
