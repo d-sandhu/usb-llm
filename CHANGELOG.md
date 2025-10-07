@@ -30,7 +30,10 @@ and follows [Semantic Versioning](https://semver.org/).
 - `docs/MODELS.md` with RAM-based guidance and verification steps.
 - `apps/ui`: React 19.1 + Vite 7 app streaming via `@microsoft/fetch-event-source`; dev proxy to launcher.
 - CI now runs `check:all` (root + all workspaces).
-- Launcher: `GET /v1/models` stub to prepare a future model selector.
+- Launcher: `GET /v1/models` now returns a **single read-only** `selected` model object (`status: "ok" | "missing" | "none"`) and `ui.allowSelection` (defaults **false**). Absolute paths are never exposed; only safe metadata (name, license, basename).
+- `/healthz` now returns `{ ok, mode, submode, runtime }` where `runtime` includes `{ source: "upstream" | "local" | "none", selectedModelId }`.
+- Launcher: headless local model resolution via `models/registry.json` and env (`USBLLM_MODEL_ID`, `USBLLM_MODELS_DIR`, `USBLLM_MODEL_FILE`). Safe-by-default: if no model is present or misconfigured, the launcher remains in **Stub** mode and never crashes.
+- UI: read-only **Model** and **Mode** chips (no selector). Surfaces selected model metadata when available; otherwise shows “missing” or “none”.
 
 ### Changed
 

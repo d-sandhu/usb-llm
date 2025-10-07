@@ -3,11 +3,12 @@ import { URL } from 'node:url';
 import { loadConfig } from './config.js';
 import { streamChat } from './upstream.js';
 import { ensureStarted, currentUrl, stop as stopLlama } from './llamaProc.js';
+import { resolveLocalModel } from './models.js';
 
 const HOST = '127.0.0.1';
 const DEFAULT_PORT = Number(process.env.PORT || 17872);
 const MAX_RETRIES = 10;
-const MAX_BODY_BYTES = 1 * 1024 * 1024; // 1MB safety cap
+const MAX_BODY_BYTES = 1 * 1024 * 1024;
 
 type JsonDict = Record<string, unknown>;
 type HttpError = Error & { statusCode?: number };
@@ -26,8 +27,6 @@ function setSecurityHeaders(res: http.ServerResponse) {
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   res.setHeader('Permissions-Policy', '');
 }
-
-/* ----------------------------- JSON helpers ----------------------------- */
 
 async function readJson<T = JsonDict>(req: http.IncomingMessage): Promise<T> {
   let total = 0;
@@ -57,8 +56,7 @@ function sendJson(res: http.ServerResponse, body: unknown, status = 200) {
   res.end(JSON.stringify(body));
 }
 
-/* --------------------------- SSE (Server Events) ------------------------ */
-
+/* --------------------------- SSE helpers ------------------------ */
 function sseStart(res: http.ServerResponse) {
   setSecurityHeaders(res);
   res.writeHead(200, {
@@ -67,12 +65,10 @@ function sseStart(res: http.ServerResponse) {
     Connection: 'keep-alive',
   });
 }
-
 function sseEvent(res: http.ServerResponse, event: string, data: unknown) {
   res.write(`event: ${event}\n`);
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
-
 function sseEnd(res: http.ServerResponse) {
   res.write(`event: done\ndata: {}\n\n`);
   res.end();
@@ -90,9 +86,10 @@ const server = http.createServer(async (req, res) => {
     }
     const url = new URL(req.url, `http://${HOST}`);
 
-    // health
+    // health (safe: defaults to stub if no model/upstream)
     if (req.method === 'GET' && url.pathname === '/healthz') {
       setSecurityHeaders(res);
+
       const submode = cfg.upstreamUrl
         ? 'external'
         : cfg.autostart && cfg.binPath && cfg.modelFile
@@ -101,31 +98,41 @@ const server = http.createServer(async (req, res) => {
             : 'local-idle'
           : null;
       const mode = submode ? 'upstream' : 'stub';
+
+      const resolved = await resolveLocalModel(cfg);
+      const runtime = {
+        source: cfg.upstreamUrl ? 'upstream' : resolved.status === 'ok' ? 'local' : 'none',
+        selectedModelId: resolved.id ?? null,
+      };
+
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      return void res.end(JSON.stringify({ ok: true, mode, submode }));
+      return void res.end(JSON.stringify({ ok: true, mode, submode, runtime }));
     }
 
-    // models (stub)
+    // models (read-only selected; safe even if no registry or file)
     if (req.method === 'GET' && url.pathname === '/v1/models') {
       setSecurityHeaders(res);
-      const items: Array<{ id: string; label: string; source: 'upstream' | 'local' }> = [];
-      if (cfg.upstreamUrl) {
-        items.push({ id: cfg.model, label: `Upstream: ${cfg.model}`, source: 'upstream' });
-      }
-      if (cfg.autostart && cfg.modelFile) {
-        const name = cfg.modelFile.split(/[\\/]/).pop() || cfg.modelFile;
-        items.push({ id: name, label: `Local: ${name}`, source: 'local' });
-      }
-      const selected = cfg.upstreamUrl
-        ? cfg.model
-        : currentUrl()
-          ? cfg.modelFile?.split(/[\\/]/).pop() || cfg.modelFile || null
-          : null;
+      const resolved = await resolveLocalModel(cfg);
+
+      const selected =
+        resolved.status === 'ok' || resolved.status === 'missing'
+          ? {
+              id: resolved.id ?? null,
+              name: resolved.name ?? null,
+              basename: resolved.basename ?? null, // never absolute
+              license: resolved.license ?? null,
+              ctx: resolved.ctx ?? null,
+              quant: resolved.quant ?? null,
+              status: resolved.status,
+            }
+          : { status: 'none' as const };
+
+      const ui = { allowSelection: cfg.uiAllowPicker === true };
 
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      return void res.end(JSON.stringify({ data: items, selected }));
+      return void res.end(JSON.stringify({ selected, ui }));
     }
 
     // home
@@ -142,14 +149,14 @@ const server = http.createServer(async (req, res) => {
 <h1>USB-LLM launcher is running</h1>
 <ul>
   <li><code>GET /</code> — this page</li>
-  <li><code>GET /healthz</code> — JSON health (mode: stub/upstream, submode detail)</li>
-  <li><code>GET /v1/models</code> — list available models (stubbed)</li>
+  <li><code>GET /healthz</code> — JSON health (mode/submode/runtime)</li>
+  <li><code>GET /v1/models</code> — read-only selected model (no picker)</li>
   <li><code>POST /api/stream</code> — SSE stream</li>
 </ul>
 <p>Bound to <code>127.0.0.1</code> only.</p>`);
     }
 
-    // streaming
+    // streaming (always safe → falls back to stub unless upstream is configured)
     if (req.method === 'POST' && url.pathname === '/api/stream') {
       type StreamReq = { prompt?: string; max_tokens?: number; delay_ms?: number };
       let body: StreamReq;
@@ -165,7 +172,7 @@ const server = http.createServer(async (req, res) => {
 
       sseStart(res);
 
-      // 1) If external upstream is configured, proxy via upstream client
+      // 1) Upstream: proxy stream
       if (cfg.upstreamUrl) {
         sseEvent(res, 'meta', {
           source: 'llama-server',
@@ -189,7 +196,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // 2) If autostart is allowed and binary+model are provided, start local server on demand
+      // 2) Autostart (next PR will use resolved.absPath); currently requires explicit modelFile
       if (cfg.autostart && cfg.binPath && cfg.modelFile) {
         sseEvent(res, 'meta', { source: 'supervisor', status: 'starting' });
         try {
@@ -200,7 +207,6 @@ const server = http.createServer(async (req, res) => {
           });
           sseEvent(res, 'meta', { source: 'supervisor', status: 'ready', url: startedUrl });
 
-          // Temporarily proxy using upstream client by pretending cfg has this URL
           const localCfg = { ...cfg, upstreamUrl: startedUrl };
           try {
             for await (const ev of streamChat(localCfg, body.prompt)) {
@@ -226,14 +232,14 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // 3) Fallback stub (no upstream, no autostart)
+      // 3) Stub fallback (default when no model is present)
       sseEvent(res, 'meta', { source: 'stub', started_at: new Date().toISOString() });
       const draft =
         `Hello,\n\nThanks for your note. Here’s a short first draft based on your prompt:\n\n` +
         body.prompt.slice(0, 200) +
         `\n\nBest regards,\nUSB-LLM`;
       const chunks = tokenizeForDemo(draft, body.max_tokens ?? 120);
-      const delay = clamp(body.delay_ms ?? 40, 10, 200); // ms per chunk
+      const delay = clamp(body.delay_ms ?? 40, 10, 200);
       let i = 0;
       const ping = setInterval(() => sseEvent(res, 'ping', {}), 15000);
       const tick = setInterval(() => {
@@ -251,7 +257,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // fallback
+    // fallback 404
     setSecurityHeaders(res);
     res.statusCode = 404;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -277,11 +283,9 @@ function tokenizeForDemo(text: string, maxTokens: number): string[] {
     .filter(Boolean);
   return raw.slice(0, Math.max(1, maxTokens));
 }
-
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
 }
-
 function listenWithRetry(port: number, retriesLeft: number) {
   server.once('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE' && retriesLeft > 0) {
@@ -300,7 +304,6 @@ function listenWithRetry(port: number, retriesLeft: number) {
     console.log(`[usb-llm] Launcher listening at http://${HOST}:${p}`);
   });
 }
-
 function shutdown() {
   console.log('\n[usb-llm] Shutting down...');
   server.close(async () => {

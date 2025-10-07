@@ -7,8 +7,13 @@ export type LauncherConfig = {
   // Optional supervisor/autostart (used only when upstreamUrl is null)
   autostart: boolean; // USBLLM_AUTOSTART=true|1
   binPath: string | null; // path to llama-server binary
-  modelFile: string | null; // path to .gguf
+  modelFile: string | null; // path to .gguf (explicit override)
   preferPort: number | null; // desired port, else auto-pick
+
+  // Headless local model resolution (no picker)
+  modelId: string | null; // matches models/registry.json
+  modelsDir: string; // directory where .gguf is expected
+  uiAllowPicker: boolean; // exposed via /v1/models for dev toggles (default false)
 };
 
 function toBool(s: string | undefined): boolean {
@@ -27,6 +32,11 @@ export function loadConfig(): LauncherConfig {
   const modelFile = (process.env.USBLLM_MODEL_FILE || '').trim() || null;
   const preferPort = process.env.USBLLM_LLAMA_PORT ? Number(process.env.USBLLM_LLAMA_PORT) : null;
 
+  // New: headless local model resolution (safe defaults)
+  const modelId = (process.env.USBLLM_MODEL_ID || '').trim() || null;
+  const modelsDir = (process.env.USBLLM_MODELS_DIR || 'models').trim() || 'models';
+  const uiAllowPicker = toBool(process.env.USBLLM_UI_ALLOW_PICKER); // default false
+
   return {
     upstreamUrl,
     model,
@@ -35,5 +45,8 @@ export function loadConfig(): LauncherConfig {
     binPath,
     modelFile,
     preferPort: Number.isFinite(preferPort ?? NaN) ? (preferPort as number) : null,
+    modelId,
+    modelsDir,
+    uiAllowPicker,
   };
 }
