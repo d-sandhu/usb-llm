@@ -39,6 +39,15 @@ and follows [Semantic Versioning](https://semver.org/).
 - UI: **Reply / Compose / Rewrite** flows with **tone** and **length** presets; one-click copy; safe validation.
 - Launcher: `/api/stream` now accepts structured fields `{ flow, tone, length, subject, context, instructions }`.
 - Launcher: prompt builder that derives a clear **system** and **user** message for upstream.
+- Launcher autostart **end-to-end**: if `USBLLM_AUTOSTART=1` and `USBLLM_LLAMA_BIN` are set, the launcher now starts `llama-server` using either:
+  - `USBLLM_MODEL_FILE` (explicit absolute/relative `.gguf`), **or**
+  - headless resolution via `USBLLM_MODEL_ID` + `USBLLM_MODELS_DIR` (from `models/registry.json`).
+- Optional runtime flags passed to `llama-server` when provided:
+  - `USBLLM_CTX_SIZE` → `--ctx-size`
+  - `USBLLM_THREADS` → `--threads`
+  - `USBLLM_TEMP_DIR` → `--temp-dir`
+  - `USBLLM_LOG_DISABLE=1` → `--log-disable`
+- Structured request body support for `/api/stream` (bridge builds a prompt from `{flow,tone,length,subject,context,instructions}`), while keeping `prompt` for legacy callers.
 
 ### Changed
 
@@ -54,6 +63,8 @@ and follows [Semantic Versioning](https://semver.org/).
 - Docs: `USAGE.md` (case fix from `USAGE.MD`) and expanded autostart instructions for **model ID** flow.
 - Upstream: accepts an optional **system override** so the server can control tone/length semantics consistently across modes.
 - Docs: updated `USAGE.md` with structured curl examples for **compose** and **reply**.
+- `/api/stream` autostart branch now uses **resolved local model** when `USBLLM_MODEL_FILE` is not set.
+- If local model is **missing/misconfigured**, we emit an SSE `error` and **fall back to Stub**, preserving a working UX instead of failing hard.
 
 **Fixed**
 
