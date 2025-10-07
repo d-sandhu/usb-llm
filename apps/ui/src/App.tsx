@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
+type Flow = 'reply' | 'compose' | 'rewrite';
+type Tone = 'neutral' | 'friendly' | 'formal' | 'concise' | 'enthusiastic' | 'apologetic';
+type Length = 'short' | 'medium' | 'long';
+
 type SelectedModel =
   | { status: 'none' }
   | {
@@ -25,14 +29,14 @@ type HealthResp = {
 };
 
 async function streamDraft(
-  prompt: string,
+  body: unknown,
   controller: AbortController,
   onToken: (t: string) => void
 ) {
   const res = await fetch('/api/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, max_tokens: 200 }),
+    body: JSON.stringify(body),
     signal: controller.signal,
   });
 
@@ -49,10 +53,9 @@ async function streamDraft(
   const decoder = new TextDecoder();
   let buffer = '';
 
-  // Clean up reader when aborted
   const onAbort = () => {
     reader.cancel().catch(() => {
-      /* ignore cancel errors */
+      /* ignore */
     });
   };
   controller.signal.addEventListener('abort', onAbort);
@@ -64,13 +67,11 @@ async function streamDraft(
 
       buffer += decoder.decode(value, { stream: true });
 
-      // Frames are separated by a blank line
       let sep: number;
       while ((sep = buffer.indexOf('\n\n')) !== -1) {
         const frame = buffer.slice(0, sep);
         buffer = buffer.slice(sep + 2);
 
-        // Minimal parse: find first "event:" and collect any "data:" lines.
         let event = 'message';
         const dataLines: string[] = [];
         for (const line of frame.split('\n')) {
@@ -84,8 +85,7 @@ async function streamDraft(
             const obj = JSON.parse(data) as { text?: string };
             if (obj.text) onToken(obj.text);
           } catch (err) {
-            // Non-JSON data frames (e.g., heartbeats or vendor meta) are ignorable.
-            void err; // no-op to satisfy ESLint no-empty
+            void err; // keep ESLint happy; non-JSON frames can be ignored
           }
         } else if (event === 'done') {
           return;
@@ -97,19 +97,32 @@ async function streamDraft(
   }
 }
 
+const TONES: Tone[] = ['neutral', 'friendly', 'formal', 'concise', 'enthusiastic', 'apologetic'];
+const LENGTHS: Length[] = ['short', 'medium', 'long'];
+
 function App() {
-  const [prompt, setPrompt] = useState('');
+  // flow state
+  const [flow, setFlow] = useState<Flow>('compose');
+  const [tone, setTone] = useState<Tone>('neutral');
+  const [len, setLen] = useState<Length>('medium');
+
+  // shared fields
+  const [subject, setSubject] = useState('');
+  const [instructions, setInstructions] = useState(''); // what we want
+  const [context, setContext] = useState(''); // original email / thread
+
+  // streaming state
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // diagnostics
   const [model, setModel] = useState<SelectedModel>({ status: 'none' });
   const [health, setHealth] = useState<HealthResp | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // Derive status message from state
   const statusMessage = error
     ? `Error: ${error}`
     : stopping
@@ -119,7 +132,6 @@ function App() {
         : 'Ready';
 
   useEffect(() => {
-    // fetch read-only model info + health on mount
     (async () => {
       try {
         const [m, h] = await Promise.all([
@@ -129,21 +141,30 @@ function App() {
         setModel(m.selected);
         setHealth(h);
       } catch {
-        // still fine; Stub mode works
+        // Stub mode still fine
       }
     })();
-
-    // Cleanup on unmount: cancel any in-flight stream
     return () => {
       abortRef.current?.abort();
       abortRef.current = null;
     };
   }, []);
 
+  function canSubmit(): boolean {
+    // Need something to work with:
+    // - compose: instructions or context
+    // - reply/rewrite: context OR (instructions if you really want a blank rewrite/reply)
+    if (flow === 'compose') return Boolean(instructions.trim() || context.trim());
+    return Boolean(context.trim() || instructions.trim());
+  }
+
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
-    // Prevent double-submit if already busy, stopping, or if abort is in-flight
-    if (!prompt.trim() || busy || stopping || abortRef.current) return;
+    if (busy || stopping || abortRef.current) return;
+    if (!canSubmit()) {
+      setError('Please add instructions and/or context first.');
+      return;
+    }
 
     setDraft('');
     setError(null);
@@ -152,8 +173,17 @@ function App() {
     const ac = new AbortController();
     abortRef.current = ac;
 
+    const body = {
+      flow,
+      tone,
+      length: len,
+      subject: subject.trim() || null,
+      context: context.trim() || null,
+      instructions: instructions.trim() || null,
+    };
+
     try {
-      await streamDraft(prompt, ac, (t) => setDraft((d) => d + t));
+      await streamDraft(body, ac, (t) => setDraft((d) => d + t));
     } catch (err) {
       const name = (err as Error)?.name || '';
       if (name !== 'AbortError') {
@@ -179,7 +209,6 @@ function App() {
     navigator.clipboard.writeText(draft).catch(() => {});
   }
 
-  // Small chips for mode + model (read-only)
   function ModeChip() {
     const m = health?.mode ?? 'stub';
     const s = health?.submode ?? null;
@@ -222,7 +251,6 @@ function App() {
         </span>
       );
     }
-    // none
     return (
       <span style={{ background: '#eee', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}>
         Model: none
@@ -230,10 +258,17 @@ function App() {
     );
   }
 
+  const labelStyle: React.CSSProperties = {
+    display: 'block',
+    fontSize: 12,
+    color: '#555',
+    marginBottom: 6,
+  };
+
   return (
     <div
       style={{
-        maxWidth: 720,
+        maxWidth: 860,
         margin: '40px auto',
         padding: 16,
         fontFamily: 'system-ui, sans-serif',
@@ -244,22 +279,148 @@ function App() {
         <ModeChip />
         <ModelChip />
       </div>
-      <p style={{ color: '#555' }}>
-        Type a brief request and get a streaming first draft (stub or your configured model).
-      </p>
+
+      {/* Flow selector */}
+      <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
+        {(['reply', 'compose', 'rewrite'] as Flow[]).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFlow(f)}
+            disabled={busy}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 12,
+              border: '1px solid #ccc',
+              background: flow === f ? '#e8f0ff' : '#f9f9f9',
+            }}
+            title={
+              f === 'reply'
+                ? 'Reply to an incoming email'
+                : f === 'compose'
+                  ? 'Compose a new email'
+                  : 'Rewrite an existing email'
+            }
+          >
+            {f[0].toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Tone + Length presets */}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div>
+          <span style={labelStyle}>Tone</span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {TONES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTone(t)}
+                disabled={busy}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 10,
+                  border: '1px solid #ccc',
+                  background: tone === t ? '#e6fff0' : '#f9f9f9',
+                  fontSize: 12,
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <span style={labelStyle}>Length</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {LENGTHS.map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => setLen(l)}
+                disabled={busy}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 10,
+                  border: '1px solid #ccc',
+                  background: len === l ? '#fff8e6' : '#f9f9f9',
+                  fontSize: 12,
+                }}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <form onSubmit={handleGenerate}>
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Draft a friendly follow-up about the Q3 report…"
-          rows={6}
-          style={{ width: '100%', padding: 12, fontSize: 14, resize: 'vertical' }}
+        {/* Subject (optional) */}
+        <label style={labelStyle}>Subject (optional)</label>
+        <input
+          type="text"
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
           disabled={busy}
+          placeholder="Follow-up on Q3 report"
+          style={{ width: '100%', padding: 10, marginBottom: 10 }}
         />
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+
+        {/* Context / Original */}
+        {(flow === 'reply' || flow === 'rewrite') && (
+          <>
+            <label style={labelStyle}>
+              {flow === 'reply' ? 'Original email / thread' : 'Original text to rewrite'}
+            </label>
+            <textarea
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              rows={8}
+              disabled={busy}
+              placeholder={
+                flow === 'reply'
+                  ? 'Paste the incoming email or thread here…'
+                  : 'Paste the text you want rewritten…'
+              }
+              style={{
+                width: '100%',
+                padding: 12,
+                fontSize: 14,
+                resize: 'vertical',
+                marginBottom: 10,
+              }}
+            />
+          </>
+        )}
+
+        {/* Instructions */}
+        <label style={labelStyle}>
+          {flow === 'compose'
+            ? 'What should the email say?'
+            : flow === 'reply'
+              ? 'Any extra guidance for the reply? (optional)'
+              : 'Rewrite guidance (optional)'}
+        </label>
+        <textarea
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+          rows={flow === 'compose' ? 8 : 4}
+          disabled={busy}
+          placeholder={
+            flow === 'compose'
+              ? 'Keep it friendly and ask for a 20-minute sync next week about the Q3 numbers.'
+              : flow === 'reply'
+                ? 'Acknowledge their delay, confirm the new deadline, and ask for the updated deck.'
+                : 'Make it friendlier and shorter while preserving key details.'
+          }
+          style={{ width: '100%', padding: 12, fontSize: 14, resize: 'vertical' }}
+        />
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           {!busy ? (
-            <button type="submit" disabled={!prompt.trim()}>
+            <button type="submit" disabled={!canSubmit()}>
               Generate draft
             </button>
           ) : (
@@ -267,7 +428,17 @@ function App() {
               Stop
             </button>
           )}
-          <button type="button" onClick={() => setPrompt('')} disabled={busy}>
+          <button
+            type="button"
+            onClick={() => {
+              setSubject('');
+              setInstructions('');
+              setContext('');
+              setDraft('');
+              setError(null);
+            }}
+            disabled={busy}
+          >
             Clear
           </button>
         </div>
@@ -279,7 +450,7 @@ function App() {
           whiteSpace: 'pre-wrap',
           background: '#f6f6f6',
           padding: 12,
-          minHeight: 120,
+          minHeight: 160,
           borderRadius: 6,
         }}
       >

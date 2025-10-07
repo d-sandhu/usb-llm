@@ -4,7 +4,7 @@ Run the **launcher** in three modes:
 
 1. **Stub** (default): no model required — streams fake tokens (great for UI dev).
 2. **External upstream**: you run a local `llama-server`; launcher proxies to it.
-3. **Autostart**: launcher starts `llama-server` for you if given a binary + model.
+3. **Autostart**: launcher starts `llama-server` for you if given a binary + model (or a registry ID).
 
 All modes expose the same endpoint:
 `POST http://127.0.0.1:<port>/api/stream` (SSE: `meta` → many `token` → `done`).
@@ -30,10 +30,66 @@ Health check:
 
 ```bash
 curl http://127.0.0.1:17872/healthz
-# => {"ok":true,"mode":"stub" | "external" | "local-idle" | "local-ready"}
+# => {
+#   "ok": true,
+#   "mode": "stub" | "upstream",
+#   "submode": "external" | "local-idle" | "local-ready" | null,
+#   "runtime": { "source": "upstream" | "local" | "none", "selectedModelId": "..." | null }
+# }
 ```
 
-Mode A — Stub (no model needed)
+---
+
+## Request body (structured)
+
+The launcher accepts **structured fields** for all modes:
+
+```json
+{
+  "flow": "compose" | "reply" | "rewrite",
+  "tone": "neutral" | "friendly" | "formal" | "concise" | "enthusiastic" | "apologetic",
+  "length": "short" | "medium" | "long",
+  "subject": "optional subject line or null",
+  "context": "original email/thread or text to rewrite (string or null)",
+  "instructions": "what you want the draft to do (string or null)"
+}
+```
+
+> Back-compat: a legacy `"prompt": "..."` string is still accepted, but the structured fields are recommended.
+
+---
+
+## Mode A — Stub (no model needed)
+
+**Example: Compose (structured)**
+
+```bash
+curl -N -H "Content-Type: application/json" \
+  -d '{
+    "flow": "compose",
+    "tone": "friendly",
+    "length": "medium",
+    "subject": "Follow-up on Q3 report",
+    "instructions": "Ask for a 20-minute sync next week about the Q3 numbers."
+  }' \
+  http://127.0.0.1:17872/api/stream
+```
+
+**Example: Reply (structured, with context)**
+
+```bash
+curl -N -H "Content-Type: application/json" \
+  -d '{
+    "flow": "reply",
+    "tone": "formal",
+    "length": "short",
+    "context": "From: Pat\nSubject: Q3 timeline\n...\n(Original email body here)",
+    "instructions": "Acknowledge delay and confirm the new deadline."
+  }' \
+  http://127.0.0.1:17872/api/stream
+```
+
+**Legacy (simple prompt) — still works**
 
 ```bash
 curl -N -H "Content-Type: application/json" \
@@ -41,22 +97,47 @@ curl -N -H "Content-Type: application/json" \
   http://127.0.0.1:17872/api/stream
 ```
 
-Mode B — External upstream (you run llama-server)
+---
+
+## Mode B — External upstream (you run `llama-server`)
+
+Start your server:
 
 ```bash
 ./llama-server -m /ABS/PATH/TO/model.gguf --host 127.0.0.1 --port 8080
+```
+
+Configure the launcher:
+
+```bash
 export USBLLM_UPSTREAM_URL="http://127.0.0.1:8080"
 export USBLLM_MODEL="default"
 export USBLLM_TEMPERATURE="0.3"
 ```
 
-PowerShell equivalents are in the repo; see earlier version.
+**Example request (structured):**
 
-Mode C — Autostart (launcher starts llama-server)
+```bash
+curl -N -H "Content-Type: application/json" \
+  -d '{
+    "flow": "compose",
+    "tone": "concise",
+    "length": "short",
+    "subject": "Quarterly check-in",
+    "instructions": "Set up a 15-minute sync; keep it crisp."
+  }' \
+  http://127.0.0.1:17872/api/stream
+```
 
-You can configure either an explicit model file or a headless model ID from the registry:
+> PowerShell equivalents are in the repo; see earlier version.
 
-Option 1 — explicit file
+---
+
+## Mode C — Autostart (launcher starts `llama-server`)
+
+You can configure either an **explicit model file** or a **headless model ID** from the registry.
+
+### Option 1 — explicit file
 
 ```bash
 export USBLLM_AUTOSTART=1
@@ -70,7 +151,7 @@ export USBLLM_TEMP_DIR="/tmp"
 export USBLLM_LOG_DISABLE=1
 ```
 
-Option 2 — headless ID from registry (no absolute path needed)
+### Option 2 — headless ID from registry (no absolute path needed)
 
 ```bash
 export USBLLM_AUTOSTART=1
@@ -85,11 +166,18 @@ export USBLLM_TEMP_DIR="/tmp"
 export USBLLM_LOG_DISABLE=1
 ```
 
-Now stream:
+Now stream (structured example):
 
 ```bash
 curl -N -H "Content-Type: application/json" \
-  -d '{"prompt":"Draft a polite follow-up."}' \
+  -d '{
+    "flow": "rewrite",
+    "tone": "neutral",
+    "length": "short",
+    "subject": "Re: Vendor timing",
+    "context": "Hi—sorry for the delay, we will ship next week...",
+    "instructions": "Make this friendlier, tighter, and confirm Friday EOD."
+  }' \
   http://127.0.0.1:17872/api/stream
 ```
 
@@ -103,9 +191,11 @@ data: {"source":"supervisor","status":"ready","url":"http://127.0.0.1:8080"}
 ...
 ```
 
-Go back to Stub by unsetting the variables you set above.
+Go back to **Stub** by unsetting the variables you set above.
 
-Environment Variables (summary)
+---
+
+## Environment Variables (summary)
 
 | Variable              | Meaning                                          |
 | --------------------- | ------------------------------------------------ |
@@ -123,14 +213,13 @@ Environment Variables (summary)
 | `USBLLM_TEMP_DIR`     | Optional temporary dir for llama-server          |
 | `USBLLM_LOG_DISABLE`  | `1/true` to pass `--log-disable`                 |
 
-Troubleshooting
+---
 
-No output? ensure /healthz and that your model path/ID exists.
+## Troubleshooting
 
-Port in use? we auto-try subsequent ports (8081, 8082, …).
+- **No output?** Check `/healthz` and verify your model path/ID exists.
+- **Port in use?** Autostart will try subsequent ports automatically (`8081`, `8082`, …).
+- **macOS blocked binary?** `xattr -dr com.apple.quarantine <bin>; chmod +x <bin>`.
+- **Model too large / slow?** Pick a smaller `.gguf` (see `MODELS.md`).
 
-macOS blocked binary? xattr -dr com.apple.quarantine <bin>; chmod +x <bin>.
-
-Model too large / slow? pick a smaller .gguf (see MODELS.md).
-
-> Note: we only _pass_ optional flags if set in envs; if a local llama build doesn’t support, just don’t set them.
+> Note: optional flags are only passed if set; if your local llama build doesn’t support them, just don’t set them.
