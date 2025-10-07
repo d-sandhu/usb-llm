@@ -12,6 +12,11 @@ export type StartOpts = {
   binPath: string;
   modelFile: string;
   preferPort?: number | null; // if unavailable, we'll increment
+  // optional flags (only applied if defined)
+  ctxSize?: number | null;
+  threads?: number | null;
+  tempDir?: string | null;
+  logDisable?: boolean | null;
 };
 
 /** Pick a free TCP port on HOST, starting at base, up to N attempts. */
@@ -51,6 +56,19 @@ function waitForTcp(port: number, timeoutMs = 40_000): Promise<void> {
   });
 }
 
+/** Build argv for llama-server using only known/optional flags if present. */
+function buildArgs(opts: StartOpts, port: number): string[] {
+  const args = ['-m', opts.modelFile, '--host', HOST, '--port', String(port)];
+
+  // Note: these flags are supported by modern llama.cpp; if not, the server may reject them.
+  if (opts.ctxSize != null) args.push('--ctx-size', String(opts.ctxSize));
+  if (opts.threads != null) args.push('--threads', String(opts.threads));
+  if (opts.tempDir) args.push('--temp-dir', opts.tempDir);
+  if (opts.logDisable) args.push('--log-disable');
+
+  return args;
+}
+
 /** Start llama-server and wait until TCP accept works. */
 export async function ensureStarted(opts: StartOpts): Promise<string> {
   if (url) return url;
@@ -58,7 +76,8 @@ export async function ensureStarted(opts: StartOpts): Promise<string> {
 
   starting = (async () => {
     const port = opts.preferPort ?? (await findFreePort(8080, 20));
-    const args = ['-m', opts.modelFile, '--host', HOST, '--port', String(port)];
+    const args = buildArgs(opts, port);
+
     // Keep it quiet; for debugging switch to 'inherit'
     proc = spawn(opts.binPath, args, { stdio: 'ignore' });
 
@@ -99,8 +118,7 @@ export async function stop(): Promise<void> {
       try {
         p.kill('SIGKILL');
       } catch (e: unknown) {
-        // Process may have already exited; explicitly ignore
-        void e;
+        void e; // process may already be gone
       }
     }, 1500).unref();
   });

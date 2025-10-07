@@ -28,6 +28,7 @@ function setSecurityHeaders(res: http.ServerResponse) {
   res.setHeader('Permissions-Policy', '');
 }
 
+/* ----------------------------- JSON helpers ----------------------------- */
 async function readJson<T = JsonDict>(req: http.IncomingMessage): Promise<T> {
   let total = 0;
   const chunks: Buffer[] = [];
@@ -86,13 +87,13 @@ const server = http.createServer(async (req, res) => {
     }
     const url = new URL(req.url, `http://${HOST}`);
 
-    // health (safe: defaults to stub if no model/upstream)
+    // health
     if (req.method === 'GET' && url.pathname === '/healthz') {
       setSecurityHeaders(res);
 
       const submode = cfg.upstreamUrl
         ? 'external'
-        : cfg.autostart && cfg.binPath && cfg.modelFile
+        : cfg.autostart && cfg.binPath
           ? currentUrl()
             ? 'local-ready'
             : 'local-idle'
@@ -110,7 +111,7 @@ const server = http.createServer(async (req, res) => {
       return void res.end(JSON.stringify({ ok: true, mode, submode, runtime }));
     }
 
-    // models (read-only selected; safe even if no registry or file)
+    // models (read-only)
     if (req.method === 'GET' && url.pathname === '/v1/models') {
       setSecurityHeaders(res);
       const resolved = await resolveLocalModel(cfg);
@@ -156,7 +157,7 @@ const server = http.createServer(async (req, res) => {
 <p>Bound to <code>127.0.0.1</code> only.</p>`);
     }
 
-    // streaming (always safe → falls back to stub unless upstream is configured)
+    // streaming
     if (req.method === 'POST' && url.pathname === '/api/stream') {
       type StreamReq = { prompt?: string; max_tokens?: number; delay_ms?: number };
       let body: StreamReq;
@@ -172,7 +173,7 @@ const server = http.createServer(async (req, res) => {
 
       sseStart(res);
 
-      // 1) Upstream: proxy stream
+      // 1) If external upstream is configured, proxy via upstream client
       if (cfg.upstreamUrl) {
         sseEvent(res, 'meta', {
           source: 'llama-server',
@@ -196,17 +197,26 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // 2) Autostart (next PR will use resolved.absPath); currently requires explicit modelFile
-      if (cfg.autostart && cfg.binPath && cfg.modelFile) {
+      // 2) Autostart path — now uses the headless resolver (no picker)
+      const resolved = await resolveLocalModel(cfg);
+      const modelPath =
+        cfg.modelFile ?? (resolved.status === 'ok' ? (resolved.absPath ?? null) : null);
+
+      if (cfg.autostart && cfg.binPath && modelPath) {
         sseEvent(res, 'meta', { source: 'supervisor', status: 'starting' });
         try {
           const startedUrl = await ensureStarted({
             binPath: cfg.binPath,
-            modelFile: cfg.modelFile,
+            modelFile: modelPath,
             preferPort: cfg.preferPort,
+            ctxSize: cfg.ctxSize ?? undefined,
+            threads: cfg.threads ?? undefined,
+            tempDir: cfg.tempDir ?? undefined,
+            logDisable: cfg.logDisable ?? undefined,
           });
           sseEvent(res, 'meta', { source: 'supervisor', status: 'ready', url: startedUrl });
 
+          // Proxy stream to the local llama-server
           const localCfg = { ...cfg, upstreamUrl: startedUrl };
           try {
             for await (const ev of streamChat(localCfg, body.prompt)) {
@@ -232,14 +242,14 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // 3) Stub fallback (default when no model is present)
+      // 3) Fallback stub (no upstream, no usable local model)
       sseEvent(res, 'meta', { source: 'stub', started_at: new Date().toISOString() });
       const draft =
         `Hello,\n\nThanks for your note. Here’s a short first draft based on your prompt:\n\n` +
         body.prompt.slice(0, 200) +
         `\n\nBest regards,\nUSB-LLM`;
       const chunks = tokenizeForDemo(draft, body.max_tokens ?? 120);
-      const delay = clamp(body.delay_ms ?? 40, 10, 200);
+      const delay = clamp(body.delay_ms ?? 40, 10, 200); // ms per chunk
       let i = 0;
       const ping = setInterval(() => sseEvent(res, 'ping', {}), 15000);
       const tick = setInterval(() => {
