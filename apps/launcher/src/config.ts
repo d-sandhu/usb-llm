@@ -20,6 +20,9 @@ export type LauncherConfig = {
   threads: number | null; // USBLLM_THREADS
   tempDir: string | null; // USBLLM_TEMP_DIR
   logDisable: boolean; // USBLLM_LOG_DISABLE=1/true
+
+  // Prompt / system prelude (optional)
+  systemPrelude: string | null; // USBLLM_SYSTEM_PRELUDE
 };
 
 function toBool(s: string | undefined): boolean {
@@ -55,6 +58,9 @@ export function loadConfig(): LauncherConfig {
   const tempDir = (process.env.USBLLM_TEMP_DIR || '').trim() || null;
   const logDisable = toBool(process.env.USBLLM_LOG_DISABLE);
 
+  // Prompt / system prelude
+  const systemPrelude = (process.env.USBLLM_SYSTEM_PRELUDE || '').trim() || null;
+
   return {
     upstreamUrl,
     model,
@@ -70,5 +76,6 @@ export function loadConfig(): LauncherConfig {
     threads,
     tempDir,
     logDisable,
+    systemPrelude,
   };
 }

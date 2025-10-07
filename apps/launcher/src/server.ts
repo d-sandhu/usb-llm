@@ -1,9 +1,11 @@
+// apps/launcher/src/server.ts
 import http from 'node:http';
 import { URL } from 'node:url';
 import { loadConfig } from './config.js';
 import { streamChat } from './upstream.js';
 import { ensureStarted, currentUrl, stop as stopLlama } from './llamaProc.js';
 import { resolveLocalModel } from './models.js';
+import { buildEmailPrompts, type Flow, type Tone, type Length } from './prompt.js';
 
 const HOST = '127.0.0.1';
 const DEFAULT_PORT = Number(process.env.PORT || 17872);
@@ -56,7 +58,7 @@ function sendJson(res: http.ServerResponse, body: unknown, status = 200) {
   res.end(JSON.stringify(body));
 }
 
-/* --------------------------- SSE helpers ------------------------ */
+/* --------------------------- SSE helpers (single implementation) ------------------------ */
 function sseStart(res: http.ServerResponse) {
   setSecurityHeaders(res);
   res.writeHead(200, {
@@ -158,10 +160,17 @@ const server = http.createServer(async (req, res) => {
 
     // streaming (always safe → falls back to stub unless upstream is configured)
     if (req.method === 'POST' && url.pathname === '/api/stream') {
-      type StreamReq = { prompt?: string; max_tokens?: number; delay_ms?: number } & Record<
-        string,
-        unknown
-      >;
+      type StreamReq = {
+        prompt?: string;
+        max_tokens?: number;
+        delay_ms?: number;
+        flow?: string;
+        tone?: string;
+        length?: string;
+        subject?: string | null;
+        context?: string | null;
+        instructions?: string | null;
+      } & Record<string, unknown>;
       let body: StreamReq;
       try {
         body = await readJson<StreamReq>(req);
@@ -170,12 +179,21 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, { error: (e as Error).message ?? 'Invalid JSON' }, status);
       }
 
-      const promptLike =
-        typeof body.prompt === 'string' && body.prompt.trim().length > 0
-          ? body.prompt
-          : structuredToPrompt(body);
+      // Prefer structured → build system+user; else legacy `prompt` string.
+      const legacyPrompt =
+        typeof body.prompt === 'string' && body.prompt.trim().length > 0 ? body.prompt : null;
 
-      if (!promptLike) {
+      const structured = toStructuredArgs(body);
+      const built = structured ? buildEmailPrompts(structured) : null;
+      const systemOverride =
+        built && cfg.systemPrelude
+          ? `${cfg.systemPrelude}\n\n${built.system}`
+          : built
+            ? built.system
+            : undefined;
+      const userContent = built ? built.user : legacyPrompt;
+
+      if (!userContent) {
         return sendJson(
           res,
           { error: 'Provide `prompt` string or structured fields {flow,tone,length,...}.' },
@@ -194,7 +212,7 @@ const server = http.createServer(async (req, res) => {
           started_at: new Date().toISOString(),
         });
         try {
-          for await (const ev of streamChat(cfg, promptLike)) {
+          for await (const ev of streamChat(cfg, userContent, systemOverride)) {
             if (ev.type === 'delta') sseEvent(res, 'token', { text: ev.text });
             else if (ev.type === 'meta') sseEvent(res, 'upstream', ev.raw);
             else if (ev.type === 'done') {
@@ -220,7 +238,7 @@ const server = http.createServer(async (req, res) => {
             message:
               'Local model not found (USBLLM_MODEL_FILE missing and no resolved model by USBLLM_MODEL_ID). Falling back to stub.',
           });
-          return streamStub(res, req, promptLike, body.max_tokens, body.delay_ms);
+          return streamStub(res, req, userContent, body.max_tokens, body.delay_ms);
         }
 
         sseEvent(res, 'meta', { source: 'supervisor', status: 'starting' });
@@ -238,7 +256,7 @@ const server = http.createServer(async (req, res) => {
 
           const localCfg = { ...cfg, upstreamUrl: startedUrl };
           try {
-            for await (const ev of streamChat(localCfg, promptLike)) {
+            for await (const ev of streamChat(localCfg, userContent, systemOverride)) {
               if (ev.type === 'delta') sseEvent(res, 'token', { text: ev.text });
               else if (ev.type === 'meta') sseEvent(res, 'upstream', ev.raw);
               else if (ev.type === 'done') {
@@ -262,7 +280,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       // 3) Stub fallback (default when no model is present)
-      return streamStub(res, req, promptLike, body.max_tokens, body.delay_ms);
+      return streamStub(res, req, userContent, body.max_tokens, body.delay_ms);
     }
 
     // fallback 404
@@ -283,26 +301,44 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-function structuredToPrompt(body: Record<string, unknown>): string | null {
-  // Friendly bridge for structured input (compose/reply/rewrite).
-  const flow = typeof body.flow === 'string' ? body.flow : null;
-  const tone = typeof body.tone === 'string' ? body.tone : null;
-  const length = typeof body.length === 'string' ? body.length : null;
+function toStructuredArgs(body: Record<string, unknown>): {
+  flow: Flow;
+  tone: Tone;
+  length: Length;
+  subject?: string | null;
+  context?: string | null;
+  instructions?: string | null;
+} | null {
+  const f = normStr(body.flow);
+  const t = normStr(body.tone);
+  const l = normStr(body.length);
   const subject = typeof body.subject === 'string' ? body.subject : null;
   const context = typeof body.context === 'string' ? body.context : null;
   const instructions = typeof body.instructions === 'string' ? body.instructions : null;
 
-  if (!flow && !tone && !length && !subject && !context && !instructions) return null;
+  if (!f && !t && !l && !subject && !context && !instructions) return null;
 
-  const lines: string[] = [];
-  lines.push('You are a concise business email assistant.');
-  if (flow) lines.push(`Flow: ${flow}`);
-  if (tone) lines.push(`Tone: ${tone}`);
-  if (length) lines.push(`Length: ${length}`);
-  if (subject) lines.push(`Subject: ${subject}`);
-  if (context) lines.push(`Context:\n${context}`);
-  if (instructions) lines.push(`Task: ${instructions}`);
-  return lines.join('\n\n');
+  const flow: Flow | null = isOneOf<Flow>(f, ['reply', 'compose', 'rewrite']);
+  const tone: Tone | null = isOneOf<Tone>(t, [
+    'neutral',
+    'friendly',
+    'formal',
+    'concise',
+    'enthusiastic',
+    'apologetic',
+  ]);
+  const length: Length | null = isOneOf<Length>(l, ['short', 'medium', 'long']);
+
+  // Require flow + tone + length to build; otherwise, fall back to legacy prompt.
+  if (!flow || !tone || !length) return null;
+  return { flow, tone, length, subject, context, instructions };
+}
+
+function normStr(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() ? v.trim().toLowerCase() : null;
+}
+function isOneOf<T extends string>(v: string | null, xs: readonly T[]): T | null {
+  return v && (xs as readonly string[]).includes(v) ? (v as T) : null;
 }
 
 function streamStub(
