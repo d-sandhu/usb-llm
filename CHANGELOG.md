@@ -34,6 +34,8 @@ and follows [Semantic Versioning](https://semver.org/).
 - `/healthz` now returns `{ ok, mode, submode, runtime }` where `runtime` includes `{ source: "upstream" | "local" | "none", selectedModelId }`.
 - Launcher: headless local model resolution via `models/registry.json` and env (`USBLLM_MODEL_ID`, `USBLLM_MODELS_DIR`, `USBLLM_MODEL_FILE`). Safe-by-default: if no model is present or misconfigured, the launcher remains in **Stub** mode and never crashes.
 - UI: read-only **Model** and **Mode** chips (no selector). Surfaces selected model metadata when available; otherwise shows “missing” or “none”.
+- Launcher: autostart now uses the **headless model resolver**; if a valid model is present, the launcher spawns `llama-server` automatically and proxies `/api/stream` to it.
+- Config: optional server flags `USBLLM_CTX_SIZE`, `USBLLM_THREADS`, `USBLLM_TEMP_DIR`, `USBLLM_LOG_DISABLE` (applied only if defined).
 
 ### Changed
 
@@ -45,3 +47,9 @@ and follows [Semantic Versioning](https://semver.org/).
 - `/healthz` now returns `{ ok, mode, submode }`.
 - Home page lists `/v1/models` and clarifies `/healthz`.
 - UI: switch to native `fetch()` + `AbortController` for SSE streaming; **Stop** now cancels immediately with no auto-retry.
+- `/healthz`: `submode` reflects local autostart readiness; `runtime.source` remains `local` only when a resolved model is available.
+- Docs: `USAGE.md` (case fix from `USAGE.MD`) and expanded autostart instructions for **model ID** flow.
+
+**Fixed**
+
+- Broken link case for usage guide (now `docs/USAGE.md`).
