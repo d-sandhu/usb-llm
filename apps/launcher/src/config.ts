@@ -7,19 +7,19 @@ export type LauncherConfig = {
   // Optional supervisor/autostart (used only when upstreamUrl is null)
   autostart: boolean; // USBLLM_AUTOSTART=true|1
   binPath: string | null; // path to llama-server binary
-  modelFile: string | null; // explicit path to .gguf (overrides headless resolver)
+  modelFile: string | null; // path to .gguf (explicit override)
   preferPort: number | null; // desired port, else auto-pick
 
   // Headless local model resolution (no picker)
   modelId: string | null; // matches models/registry.json
-  modelsDir: string; // where .gguf is expected
+  modelsDir: string; // directory where .gguf is expected
   uiAllowPicker: boolean; // exposed via /v1/models for dev toggles (default false)
 
-  // Optional tuning flags passed to llama-server (only if defined)
+  // Llama flags (optional)
   ctxSize: number | null; // USBLLM_CTX_SIZE
   threads: number | null; // USBLLM_THREADS
   tempDir: string | null; // USBLLM_TEMP_DIR
-  logDisable: boolean; // USBLLM_LOG_DISABLE
+  logDisable: boolean; // USBLLM_LOG_DISABLE=1/true
 };
 
 function toBool(s: string | undefined): boolean {
@@ -28,7 +28,7 @@ function toBool(s: string | undefined): boolean {
   return v === '1' || v === 'true' || v === 'yes';
 }
 
-function toNum(s: string | undefined): number | null {
+function toIntOrNull(s: string | undefined): number | null {
   if (!s) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
@@ -42,16 +42,16 @@ export function loadConfig(): LauncherConfig {
   const autostart = toBool(process.env.USBLLM_AUTOSTART);
   const binPath = (process.env.USBLLM_LLAMA_BIN || '').trim() || null;
   const modelFile = (process.env.USBLLM_MODEL_FILE || '').trim() || null;
-  const preferPort = toNum(process.env.USBLLM_LLAMA_PORT);
+  const preferPort = process.env.USBLLM_LLAMA_PORT ? Number(process.env.USBLLM_LLAMA_PORT) : null;
 
-  // Headless model resolution
+  // Headless resolution
   const modelId = (process.env.USBLLM_MODEL_ID || '').trim() || null;
   const modelsDir = (process.env.USBLLM_MODELS_DIR || 'models').trim() || 'models';
   const uiAllowPicker = toBool(process.env.USBLLM_UI_ALLOW_PICKER); // default false
 
-  // Optional server tuning flags
-  const ctxSize = toNum(process.env.USBLLM_CTX_SIZE);
-  const threads = toNum(process.env.USBLLM_THREADS);
+  // Llama flags
+  const ctxSize = toIntOrNull(process.env.USBLLM_CTX_SIZE);
+  const threads = toIntOrNull(process.env.USBLLM_THREADS);
   const tempDir = (process.env.USBLLM_TEMP_DIR || '').trim() || null;
   const logDisable = toBool(process.env.USBLLM_LOG_DISABLE);
 
