@@ -1,5 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 
+type SelectedModel =
+  | { status: 'none' }
+  | {
+      status: 'ok' | 'missing';
+      id: string | null;
+      name: string | null;
+      basename: string | null;
+      license: string | null;
+      ctx: number | null;
+      quant: string | null;
+    };
+
+type ModelsResp = {
+  selected: SelectedModel;
+  ui: { allowSelection: boolean };
+};
+
+type HealthResp = {
+  ok: boolean;
+  mode: 'stub' | 'upstream';
+  submode: 'external' | 'local-idle' | 'local-ready' | null;
+  runtime?: { source: 'upstream' | 'local' | 'none'; selectedModelId: string | null };
+};
+
 async function streamDraft(
   prompt: string,
   controller: AbortController,
@@ -59,8 +83,9 @@ async function streamDraft(
           try {
             const obj = JSON.parse(data) as { text?: string };
             if (obj.text) onToken(obj.text);
-          } catch {
-            /* ignore */
+          } catch (err) {
+            // Non-JSON data frames (e.g., heartbeats or vendor meta) are ignorable.
+            void err; // no-op to satisfy ESLint no-empty
           }
         } else if (event === 'done') {
           return;
@@ -79,6 +104,9 @@ function App() {
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [model, setModel] = useState<SelectedModel>({ status: 'none' });
+  const [health, setHealth] = useState<HealthResp | null>(null);
+
   const abortRef = useRef<AbortController | null>(null);
 
   // Derive status message from state
@@ -91,6 +119,20 @@ function App() {
         : 'Ready';
 
   useEffect(() => {
+    // fetch read-only model info + health on mount
+    (async () => {
+      try {
+        const [m, h] = await Promise.all([
+          fetch('/v1/models').then((r) => r.json() as Promise<ModelsResp>),
+          fetch('/healthz').then((r) => r.json() as Promise<HealthResp>),
+        ]);
+        setModel(m.selected);
+        setHealth(h);
+      } catch {
+        // still fine; Stub mode works
+      }
+    })();
+
     // Cleanup on unmount: cancel any in-flight stream
     return () => {
       abortRef.current?.abort();
@@ -137,6 +179,57 @@ function App() {
     navigator.clipboard.writeText(draft).catch(() => {});
   }
 
+  // Small chips for mode + model (read-only)
+  function ModeChip() {
+    const m = health?.mode ?? 'stub';
+    const s = health?.submode ?? null;
+    const text =
+      m === 'upstream'
+        ? s === 'external'
+          ? 'Mode: Upstream'
+          : s === 'local-ready'
+            ? 'Mode: Local (ready)'
+            : s === 'local-idle'
+              ? 'Mode: Local (idle)'
+              : 'Mode: Upstream'
+        : 'Mode: Stub';
+    return (
+      <span style={{ background: '#eee', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}>
+        {text}
+      </span>
+    );
+  }
+
+  function ModelChip() {
+    if (model.status === 'ok') {
+      return (
+        <span
+          title={model.id || undefined}
+          style={{ background: '#eef8ee', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}
+        >
+          Model: {model.name || model.basename || 'Selected'}{' '}
+          {model.license ? `(${model.license})` : ''}
+        </span>
+      );
+    }
+    if (model.status === 'missing') {
+      return (
+        <span
+          style={{ background: '#fff4e5', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}
+          title="Model file not found; running in Stub mode."
+        >
+          Model: missing
+        </span>
+      );
+    }
+    // none
+    return (
+      <span style={{ background: '#eee', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}>
+        Model: none
+      </span>
+    );
+  }
+
   return (
     <div
       style={{
@@ -147,6 +240,10 @@ function App() {
       }}
     >
       <h1>USB-LLM</h1>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+        <ModeChip />
+        <ModelChip />
+      </div>
       <p style={{ color: '#555' }}>
         Type a brief request and get a streaming first draft (stub or your configured model).
       </p>
