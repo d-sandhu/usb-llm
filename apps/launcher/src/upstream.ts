@@ -2,42 +2,37 @@ import type { LauncherConfig } from './config.js';
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
-type UpstreamChunk =
+export type UpstreamChunk =
   | { type: 'delta'; text: string }
   | { type: 'done' }
   | { type: 'meta'; raw: unknown };
 
-// Minimal shape we care about from OpenAI/llama-server stream chunks
 type ChatStreamJSON = {
   choices?: Array<{
     delta?: { content?: string; role?: 'assistant' | 'system' | 'user' };
-    text?: string; // some servers use this instead of delta.content
+    text?: string;
     finish_reason?: string | null;
   }>;
 };
 
-/** Extract streamed text from a parsed chunk; returns null if not present. */
 function extractDeltaText(obj: unknown): string | null {
   if (typeof obj !== 'object' || obj === null) return null;
   const o = obj as ChatStreamJSON;
   const c0 = o.choices?.[0];
   if (!c0) return null;
-
   const delta = c0.delta?.content;
   if (typeof delta === 'string' && delta.length) return delta;
-
   const text = c0.text;
   if (typeof text === 'string' && text.length) return text;
-
   return null;
 }
 
 export async function* streamChat(
   cfg: LauncherConfig,
-  prompt: string
+  userContent: string,
+  systemOverride?: string
 ): AsyncGenerator<UpstreamChunk, void, void> {
   if (!cfg.upstreamUrl) {
-    // In stub mode we just emit meta+done; caller handles stub path separately
     yield { type: 'meta', raw: { source: 'stub' } };
     yield { type: 'done' };
     return;
@@ -46,8 +41,8 @@ export async function* streamChat(
   const url = new URL('/v1/chat/completions', cfg.upstreamUrl).toString();
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: 'You are a concise business email assistant.' },
-    { role: 'user', content: prompt },
+    { role: 'system', content: systemOverride || 'You are a concise business email assistant.' },
+    { role: 'user', content: userContent },
   ];
 
   const body = {
@@ -71,7 +66,6 @@ export async function* streamChat(
   const decoder = new TextDecoder();
   let buffer = '';
 
-  // Small meta for the client
   yield { type: 'meta', raw: { source: 'llama-server', url: cfg.upstreamUrl, model: cfg.model } };
 
   while (true) {
@@ -84,7 +78,6 @@ export async function* streamChat(
       const frame = buffer.slice(0, sep);
       buffer = buffer.slice(sep + 2);
 
-      // Collect data lines (ignore event: lines, comments, etc.)
       const dataLines = frame
         .split('\n')
         .filter((l) => l.startsWith('data:'))
@@ -99,19 +92,14 @@ export async function* streamChat(
         try {
           const parsed: unknown = JSON.parse(data);
           const piece = extractDeltaText(parsed);
-          if (piece) {
-            yield { type: 'delta', text: piece };
-          } else {
-            // Not a delta chunk; surface for debugging/telemetry
-            yield { type: 'meta', raw: parsed };
-          }
+          if (piece) yield { type: 'delta', text: piece };
+          else yield { type: 'meta', raw: parsed };
         } catch {
-          // Non-JSON data lines can be ignored safely
+          // ignore non-JSON data lines
         }
       }
     }
   }
 
-  // In case we never saw [DONE], still conclude the stream
   yield { type: 'done' };
 }

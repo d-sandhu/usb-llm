@@ -4,6 +4,7 @@ import { loadConfig } from './config.js';
 import { streamChat } from './upstream.js';
 import { ensureStarted, currentUrl, stop as stopLlama } from './llamaProc.js';
 import { resolveLocalModel } from './models.js';
+import { buildEmailPrompts, type Flow, type Tone, type Length } from './prompt.js';
 
 const HOST = '127.0.0.1';
 const DEFAULT_PORT = Number(process.env.PORT || 17872);
@@ -159,7 +160,20 @@ const server = http.createServer(async (req, res) => {
 
     // streaming
     if (req.method === 'POST' && url.pathname === '/api/stream') {
-      type StreamReq = { prompt?: string; max_tokens?: number; delay_ms?: number };
+      type StreamReq = {
+        // legacy
+        prompt?: string;
+        max_tokens?: number;
+        delay_ms?: number;
+        // new UI fields
+        flow?: Flow;
+        tone?: Tone;
+        length?: Length;
+        subject?: string | null;
+        context?: string | null;
+        instructions?: string | null;
+      };
+
       let body: StreamReq;
       try {
         body = await readJson<StreamReq>(req);
@@ -167,22 +181,46 @@ const server = http.createServer(async (req, res) => {
         const status = (e as HttpError).statusCode ?? 400;
         return sendJson(res, { error: (e as Error).message ?? 'Invalid JSON' }, status);
       }
-      if (!body.prompt || typeof body.prompt !== 'string') {
-        return sendJson(res, { error: '`prompt` is required (string)' }, 400);
+
+      // Back-compat: if no flow provided, treat as simple compose with a single "instructions" field.
+      const flow: Flow = body.flow || 'compose';
+      const tone: Tone = body.tone || 'neutral';
+      const length: Length = body.length || 'medium';
+      const subject = body.subject ?? null;
+      const context = body.context ?? null;
+      const instructions = body.instructions ?? body.prompt ?? null;
+
+      // Basic validation: at least one of context/instructions should exist
+      if (!instructions && !context) {
+        return sendJson(
+          res,
+          { error: 'Provide at least one of "instructions" or "context".' },
+          400
+        );
       }
 
-      sseStart(res);
+      const { system, user } = buildEmailPrompts({
+        flow,
+        tone,
+        length,
+        subject,
+        context,
+        instructions,
+      });
 
-      // 1) If external upstream is configured, proxy via upstream client
+      sseStart(res);
+      sseEvent(res, 'meta', {
+        source: 'builder',
+        flow,
+        tone,
+        length,
+        started_at: new Date().toISOString(),
+      });
+
+      // 1) External upstream
       if (cfg.upstreamUrl) {
-        sseEvent(res, 'meta', {
-          source: 'llama-server',
-          url: cfg.upstreamUrl,
-          model: cfg.model,
-          started_at: new Date().toISOString(),
-        });
         try {
-          for await (const ev of streamChat(cfg, body.prompt)) {
+          for await (const ev of streamChat(cfg, user, system)) {
             if (ev.type === 'delta') sseEvent(res, 'token', { text: ev.text });
             else if (ev.type === 'meta') sseEvent(res, 'upstream', ev.raw);
             else if (ev.type === 'done') {
@@ -197,7 +235,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // 2) Autostart path — now uses the headless resolver (no picker)
+      // 2) Autostart local if possible
       const resolved = await resolveLocalModel(cfg);
       const modelPath =
         cfg.modelFile ?? (resolved.status === 'ok' ? (resolved.absPath ?? null) : null);
@@ -216,10 +254,9 @@ const server = http.createServer(async (req, res) => {
           });
           sseEvent(res, 'meta', { source: 'supervisor', status: 'ready', url: startedUrl });
 
-          // Proxy stream to the local llama-server
           const localCfg = { ...cfg, upstreamUrl: startedUrl };
           try {
-            for await (const ev of streamChat(localCfg, body.prompt)) {
+            for await (const ev of streamChat(localCfg, user, system)) {
               if (ev.type === 'delta') sseEvent(res, 'token', { text: ev.text });
               else if (ev.type === 'meta') sseEvent(res, 'upstream', ev.raw);
               else if (ev.type === 'done') {
@@ -242,14 +279,22 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // 3) Fallback stub (no upstream, no usable local model)
-      sseEvent(res, 'meta', { source: 'stub', started_at: new Date().toISOString() });
-      const draft =
-        `Hello,\n\nThanks for your note. Here’s a short first draft based on your prompt:\n\n` +
-        body.prompt.slice(0, 200) +
-        `\n\nBest regards,\nUSB-LLM`;
-      const chunks = tokenizeForDemo(draft, body.max_tokens ?? 120);
-      const delay = clamp(body.delay_ms ?? 40, 10, 200); // ms per chunk
+      // 3) Stub fallback
+      const bodyLabel = flow === 'compose' ? 'Draft' : flow === 'reply' ? 'Reply' : 'Rewrite';
+      const draftHeader = [
+        subject ? `Subject: ${subject}\n\n` : '',
+        `${bodyLabel} (${tone}, ${length})\n\n`,
+      ].join('');
+
+      const demoBody =
+        (instructions ? `Requested:\n${instructions}\n\n` : '') +
+        (context ? `Context:\n${context.slice(0, 800)}\n\n` : '') +
+        '---\n(This is a stub demo draft. Configure a model to enable real inference.)\n';
+
+      const draft = draftHeader + demoBody;
+
+      const chunks = tokenizeForDemo(draft, body.max_tokens ?? 200);
+      const delay = clamp(body.delay_ms ?? 30, 10, 200);
       let i = 0;
       const ping = setInterval(() => sseEvent(res, 'ping', {}), 15000);
       const tick = setInterval(() => {

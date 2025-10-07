@@ -36,6 +36,9 @@ and follows [Semantic Versioning](https://semver.org/).
 - UI: read-only **Model** and **Mode** chips (no selector). Surfaces selected model metadata when available; otherwise shows “missing” or “none”.
 - Launcher: autostart now uses the **headless model resolver**; if a valid model is present, the launcher spawns `llama-server` automatically and proxies `/api/stream` to it.
 - Config: optional server flags `USBLLM_CTX_SIZE`, `USBLLM_THREADS`, `USBLLM_TEMP_DIR`, `USBLLM_LOG_DISABLE` (applied only if defined).
+- UI: **Reply / Compose / Rewrite** flows with **tone** and **length** presets; one-click copy; safe validation.
+- Launcher: `/api/stream` now accepts structured fields `{ flow, tone, length, subject, context, instructions }`.
+- Launcher: prompt builder that derives a clear **system** and **user** message for upstream.
 
 ### Changed
 
@@ -49,6 +52,8 @@ and follows [Semantic Versioning](https://semver.org/).
 - UI: switch to native `fetch()` + `AbortController` for SSE streaming; **Stop** now cancels immediately with no auto-retry.
 - `/healthz`: `submode` reflects local autostart readiness; `runtime.source` remains `local` only when a resolved model is available.
 - Docs: `USAGE.md` (case fix from `USAGE.MD`) and expanded autostart instructions for **model ID** flow.
+- Upstream: accepts an optional **system override** so the server can control tone/length semantics consistently across modes.
+- Docs: updated `USAGE.md` with structured curl examples for **compose** and **reply**.
 
 **Fixed**
 
