@@ -197,23 +197,22 @@ Go back to **Stub** by unsetting the variables you set above.
 
 ## Environment Variables (summary)
 
-| Variable              | Meaning                                          |
-| --------------------- | ------------------------------------------------ |
-| `USBLLM_UPSTREAM_URL` | Use existing server (skips autostart)            |
-| `USBLLM_MODEL`        | Model name/alias for upstream                    |
-| `USBLLM_TEMPERATURE`  | Sampling temperature                             |
-| `USBLLM_AUTOSTART`    | `1/true` to allow autostart                      |
-| `USBLLM_LLAMA_BIN`    | Path to `llama-server` binary                    |
-| `USBLLM_MODEL_FILE`   | Path to `.gguf` (overrides headless resolver)    |
-| `USBLLM_MODEL_ID`     | Registry id used to resolve a local `.gguf`      |
-| `USBLLM_MODELS_DIR`   | Directory where `.gguf` lives (default `models`) |
-| `USBLLM_LLAMA_PORT`   | Preferred port (auto-increments if busy)         |
-| `USBLLM_CTX_SIZE`     | Optional context window for llama-server         |
-| `USBLLM_THREADS`      | Optional CPU threads for llama-server            |
-| `USBLLM_TEMP_DIR`     | Optional temporary dir for llama-server          |
-| `USBLLM_LOG_DISABLE`  | `1/true` to pass `--log-disable`                 |
-
----
+| Variable                | Meaning                                                                 |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `USBLLM_UPSTREAM_URL`   | Use existing server (skips autostart)                                   |
+| `USBLLM_MODEL`          | Model name/alias for upstream                                           |
+| `USBLLM_TEMPERATURE`    | Sampling temperature                                                    |
+| `USBLLM_AUTOSTART`      | `1/true` to allow autostart                                             |
+| `USBLLM_LLAMA_BIN`      | Path to `llama-server` binary                                           |
+| `USBLLM_MODEL_FILE`     | Path to `.gguf` (overrides headless resolver)                           |
+| `USBLLM_MODEL_ID`       | Registry id used to resolve a local `.gguf`                             |
+| `USBLLM_MODELS_DIR`     | Directory where `.gguf` lives (default `models`)                        |
+| `USBLLM_LLAMA_PORT`     | Preferred port (auto-increments if busy)                                |
+| `USBLLM_CTX_SIZE`       | Optional context window for llama-server                                |
+| `USBLLM_THREADS`        | Optional CPU threads for llama-server                                   |
+| `USBLLM_TEMP_DIR`       | Optional temporary dir for llama-server                                 |
+| `USBLLM_LOG_DISABLE`    | `1/true` to pass `--log-disable`                                        |
+| `USBLLM_SYSTEM_PRELUDE` | Optional text prepended to the system prompt (before tone/length rules) |
 
 ## Troubleshooting
 
