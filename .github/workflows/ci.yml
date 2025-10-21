@@ -27,3 +27,29 @@ jobs:
       - run: npm run check:all
 
       - run: npm run -w apps/launcher build
+
+  # ────────────────────────────────────────────────────────────────
+  # Optional: Golden Tasks (Stub Mode)
+  # Uncomment to run quality harness in CI (currently disabled)
+  # ────────────────────────────────────────────────────────────────
+  # golden-stub:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version-file: '.nvmrc'
+  #         cache: 'npm'
+  #
+  #     - run: npm ci
+  #
+  #     - run: npm run -w apps/launcher build
+  #
+  #     - name: Start launcher in background
+  #       run: |
+  #         npm run -w apps/launcher start &
+  #         sleep 3
+  #
+  #     - name: Run golden tasks (Stub mode)
+  #       run: npm run golden -- --limit 5

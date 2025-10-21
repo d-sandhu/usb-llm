@@ -1,0 +1,17 @@
+{
+  "name": "@usb-llm/golden",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Golden tasks & offline quality harness for USB-LLM",
+  "scripts": {
+    "check": "eslint . && prettier --check ."
+  },
+  "keywords": [
+    "usb-llm",
+    "testing",
+    "quality"
+  ],
+  "author": "",
+  "license": "Apache-2.0"
+}

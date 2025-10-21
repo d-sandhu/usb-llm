@@ -12,7 +12,7 @@ export default tseslint.config(
 
   // Treat repo scripts as Node ESM (enable Node globals)
   {
-    files: ['scripts/**/*.{js,mjs}', '*.mjs'],
+    files: ['scripts/**/*.{js,mjs}', 'packages/**/*.mjs', '*.mjs'],
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: 'module',

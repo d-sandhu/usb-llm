@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "tasks": [
+    {
+      "label": "Reply: Formal follow-up",
+      "flow": "reply",
+      "tone": "formal",
+      "length": "short",
+      "context": "Subject: Q3 Report Review. Colleague sent Q3 report and asked for feedback by Friday."
+    },
+    {
+      "label": "Reply: Friendly thank you",
+      "flow": "reply",
+      "tone": "friendly",
+      "length": "short",
+      "context": "Friend helped me move apartments last weekend."
+    },
+    {
+      "label": "Reply: Concise meeting confirmation",
+      "flow": "reply",
+      "tone": "concise",
+      "length": "short",
+      "context": "Subject: Re: Meeting on Tuesday. Manager proposed Tuesday 2pm for project sync."
+    },
+    {
+      "label": "Compose: Formal introduction",
+      "flow": "compose",
+      "tone": "formal",
+      "length": "medium",
+      "instructions": "Subject: Introduction - Partnership Opportunity. Introduce yourself and propose a collaboration call next week."
+    },
+    {
+      "label": "Compose: Friendly event invitation",
+      "flow": "compose",
+      "tone": "friendly",
+      "length": "medium",
+      "instructions": "Subject: You're Invited: Summer BBQ. Invite neighbors to a backyard BBQ on July 15th at 5pm."
+    },
+    {
+      "label": "Compose: Concise status update",
+      "flow": "compose",
+      "tone": "concise",
+      "length": "short",
+      "instructions": "Subject: Project Alpha - Week 12 Update. Summarize progress: backend complete, frontend 60% done, on track for launch."
+    },
+    {
+      "label": "Rewrite: Formal tone shift",
+      "flow": "rewrite",
+      "tone": "formal",
+      "length": "medium",
+      "context": "Hey! Just wanted to check if you got my last email about the thing we discussed. Let me know!"
+    },
+    {
+      "label": "Rewrite: Friendly tone shift",
+      "flow": "rewrite",
+      "tone": "friendly",
+      "length": "medium",
+      "context": "Dear Sir/Madam, I am writing to inquire about the availability of your product. Please advise at your earliest convenience."
+    },
+    {
+      "label": "Rewrite: Concise reduction",
+      "flow": "rewrite",
+      "tone": "concise",
+      "length": "short",
+      "context": "I wanted to reach out to you to see if you might be available to have a conversation about the proposal I sent over last week, because I think it would be really beneficial for both of us to discuss the details in more depth."
+    },
+    {
+      "label": "Reply: Formal meeting decline",
+      "flow": "reply",
+      "tone": "formal",
+      "length": "short",
+      "context": "Subject: Re: Sync Call Tomorrow. Invitation for a call tomorrow but I have a conflict. Offer alternative times."
+    },
+    {
+      "label": "Compose: Formal request for information",
+      "flow": "compose",
+      "tone": "formal",
+      "length": "medium",
+      "instructions": "Subject: Question About Invoice #4521. Ask accounting about a discrepancy in the invoice amount."
+    },
+    {
+      "label": "Reply: Friendly congratulations",
+      "flow": "reply",
+      "tone": "friendly",
+      "length": "short",
+      "context": "Friend just announced they got a promotion at work."
+    },
+    {
+      "label": "Compose: Concise reminder",
+      "flow": "compose",
+      "tone": "concise",
+      "length": "short",
+      "instructions": "Subject: Reminder: Document Due Friday. Remind team that design doc is due end of week."
+    },
+    {
+      "label": "Rewrite: Formal clarification",
+      "flow": "rewrite",
+      "tone": "formal",
+      "length": "long",
+      "context": "Not sure what you meant by that. Can you explain more? Also what about the other thing?"
+    },
+    {
+      "label": "Reply: Formal apology",
+      "flow": "reply",
+      "tone": "formal",
+      "length": "medium",
+      "context": "Subject: Re: Missed Deadline. I missed the Friday deadline for deliverables. Apologize and provide new timeline."
+    },
+    {
+      "label": "Compose: Friendly check-in",
+      "flow": "compose",
+      "tone": "friendly",
+      "length": "short",
+      "instructions": "Subject: Just Checking In! Check in with old college friend, see how they're doing."
+    },
+    {
+      "label": "Reply: Concise acceptance",
+      "flow": "reply",
+      "tone": "concise",
+      "length": "short",
+      "context": "Subject: Re: Calendar Invite. Accept meeting invite for Thursday at 10am."
+    },
+    {
+      "label": "Compose: Formal job application follow-up",
+      "flow": "compose",
+      "tone": "formal",
+      "length": "medium",
+      "instructions": "Subject: Following Up - Software Engineer Position. Follow up on job application submitted two weeks ago."
+    },
+    {
+      "label": "Rewrite: Friendly expansion",
+      "flow": "rewrite",
+      "tone": "friendly",
+      "length": "long",
+      "context": "Thanks for your help!"
+    },
+    {
+      "label": "Reply: Formal feedback request",
+      "flow": "reply",
+      "tone": "formal",
+      "length": "medium",
+      "context": "Subject: Re: Draft Proposal. Colleague sent a draft proposal and asked for my thoughts before presenting to leadership."
+    },
+    {
+      "label": "Compose: Concise announcement",
+      "flow": "compose",
+      "tone": "concise",
+      "length": "short",
+      "instructions": "Subject: Office Closure - Holiday. Announce office will be closed Monday for holiday."
+    },
+    {
+      "label": "Reply: Friendly event RSVP",
+      "flow": "reply",
+      "tone": "friendly",
+      "length": "short",
+      "context": "Subject: Re: Wedding Invitation. Cousin invited me to their wedding. Confirm I'll attend and bring a plus-one."
+    },
+    {
+      "label": "Compose: Formal complaint",
+      "flow": "compose",
+      "tone": "formal",
+      "length": "long",
+      "instructions": "Subject: Service Issue - Order #7823. Report a problem with a recent order: arrived damaged, request replacement or refund."
+    },
+    {
+      "label": "Rewrite: Concise simplification",
+      "flow": "rewrite",
+      "tone": "concise",
+      "length": "short",
+      "context": "In light of the recent developments and taking into consideration all of the factors involved, I believe we should proceed with the original plan as discussed."
+    },
+    {
+      "label": "Reply: Formal project update request",
+      "flow": "reply",
+      "tone": "formal",
+      "length": "short",
+      "context": "Subject: Re: Status Check. Manager asked for a quick update on the migration project status."
+    }
+  ]
+}
