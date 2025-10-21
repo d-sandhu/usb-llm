@@ -33,13 +33,18 @@ and follows [Semantic Versioning](https://semver.org/).
 - Launcher: `GET /v1/models` now returns a **single read-only** `selected` model object (`status: "ok" | "missing" | "none"`) and `ui.allowSelection` (defaults **false**). Absolute paths are never exposed; only safe metadata (name, license, basename).
 - `/healthz` now returns `{ ok, mode, submode, runtime }` where `runtime` includes `{ source: "upstream" | "local" | "none", selectedModelId }`.
 - Launcher: headless local model resolution via `models/registry.json` and env (`USBLLM_MODEL_ID`, `USBLLM_MODELS_DIR`, `USBLLM_MODEL_FILE`). Safe-by-default: if no model is present or misconfigured, the launcher remains in **Stub** mode and never crashes.
-- UI: read-only **Model** and **Mode** chips (no selector). Surfaces selected model metadata when available; otherwise shows “missing” or “none”.
+- UI: read-only **Model** and **Mode** chips (no selector). Surfaces selected model metadata when available; otherwise shows "missing" or "none".
 - Launcher: autostart now uses the **headless model resolver**; if a valid model is present, the launcher spawns `llama-server` automatically and proxies `/api/stream` to it.
 - Config: optional server flags `USBLLM_CTX_SIZE`, `USBLLM_THREADS`, `USBLLM_TEMP_DIR`, `USBLLM_LOG_DISABLE` (applied only if defined).
 - UI: **Reply / Compose / Rewrite** flows with **tone** and **length** presets; one-click copy; safe validation.
 - Launcher: `/api/stream` now accepts structured fields `{ flow, tone, length, subject, context, instructions }`.
 - Launcher: prompt builder that derives a clear **system** and **user** message for upstream, now **wired into streaming**.
 - Config: `USBLLM_SYSTEM_PRELUDE` to prepend a small configurable prelude to the system prompt.
+- Node SEA packaging: single-file launcher binaries for macOS and Windows (`pack:sea:mac`, `pack:sea:win`).
+- `docs/PACKAGING.md`: USB layout, SEA build steps, and distribution guidance.
+- `packages/golden`: Golden tasks & offline quality harness CLI with 25 email tasks, basic heuristics (length, greeting, CTA), and CI-friendly exit codes. Supports Stub mode and real model testing.
+- Root convenience scripts: `npm run golden`, `npm run golden:stub`, `npm run golden:quick`.
+- Optional CI job (commented) for running golden tasks in Stub mode.
 
 ### Changed
 
@@ -55,9 +60,5 @@ and follows [Semantic Versioning](https://semver.org/).
 - Docs: `USAGE.md` (case fix from `USAGE.MD`) and expanded autostart instructions for **model ID** flow.
 - Upstream: accepts an optional **system override** so the server can control tone/length semantics consistently across modes.
 - Docs: updated `USAGE.md` with structured curl examples for **compose** and **reply**.
-- `/api/stream` autostart branch now uses **resolved local model** when `USBLLM_MODEL_FILE` is not set.
-- If local model is **missing/misconfigured**, we emit an SSE `error` and **fall back to Stub**, preserving a working UX instead of failing hard.
-
-**Fixed**
-
-- Broken link case for usage guide (now `docs/USAGE.md`).
+- Build output directories (`dist-sea/`, `build/`) are now excluded from lint/format checks.
+- Packaging: SEA config now correctly bundles the launcher into a single `.cjs` file before embedding.
