@@ -1,0 +1,6 @@
+{
+  "main": "./dist-sea/server.cjs",
+  "output": "./build/usb-llm-launcher.blob",
+  "useSnapshot": false,
+  "disableExperimentalSEAWarning": true
+}

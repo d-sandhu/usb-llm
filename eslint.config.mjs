@@ -26,6 +26,11 @@ export default tseslint.config(
 
   // Ignores
   {
-    ignores: ['**/dist/**', '**/build/**', '**/node_modules/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/dist-sea/**', // <-- bundled CJS for SEA (do not lint)
+    ],
   }
 );
