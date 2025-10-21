@@ -43,8 +43,11 @@ and follows [Semantic Versioning](https://semver.org/).
 - Node SEA packaging: single-file launcher binaries for macOS and Windows (`pack:sea:mac`, `pack:sea:win`).
 - `docs/PACKAGING.md`: USB layout, SEA build steps, and distribution guidance.
 - `packages/golden`: Golden tasks & offline quality harness CLI with 25 email tasks, basic heuristics (length, greeting, CTA), and CI-friendly exit codes. Supports Stub mode and real model testing.
-- Root convenience scripts: `npm run golden`, `npm run golden:stub`, `npm run golden:quick`.
+- Root convenience script: `npm run golden`.
 - Optional CI job (commented) for running golden tasks in Stub mode.
+- `scripts/model-helper.mjs`: CLI to add/list models with SHA-256 verification.
+- Root scripts: `models:add`, `models:list`, `models:help`.
+- Improved model setup workflow in `docs/MODELS.md` with helper commands and testing instructions.
 
 ### Changed
 
@@ -62,3 +65,5 @@ and follows [Semantic Versioning](https://semver.org/).
 - Docs: updated `USAGE.md` with structured curl examples for **compose** and **reply**.
 - Build output directories (`dist-sea/`, `build/`) are now excluded from lint/format checks.
 - Packaging: SEA config now correctly bundles the launcher into a single `.cjs` file before embedding.
+- `README.md`: updated models section to reference `models:add` and golden tasks workflow.
+- `docs/MODELS.md`: complete rewrite with model helper CLI workflow, testing instructions, and troubleshooting.

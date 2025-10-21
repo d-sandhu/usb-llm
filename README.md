@@ -61,7 +61,7 @@ See **[docs/USAGE.md](docs/USAGE.md)** for:
 - **External upstream** (you run `llama-server`)
 - **Autostart** (launcher starts `llama-server` given a binary + model)
 
-See **[docs/MODELS.md](docs/MODELS.md)** to choose and verify a model by RAM tier (Starter / Standard / Pro).
+See **[docs/MODELS.md](docs/MODELS.md)** to choose and set up a model by RAM tier (Starter / Standard / Pro). Use `npm run models:add` to copy and verify `.gguf` files, then test with `npm run golden`.
 
 ---
 
