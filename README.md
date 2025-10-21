@@ -11,7 +11,11 @@ USB-LLM is a plug-and-play **offline** email-drafting assistant that runs from a
 - Windows portable `.exe`
 - macOS portable `.app` (unsigned)
 
-> Packaging is in progress. For development, the Node launcher runs locally.
+### Packaging
+
+See **[docs/PACKAGING.md](docs/PACKAGING.md)** for single-file portable builds (Node SEA) and the USB layout/runbook for Windows & macOS.
+
+> For development, the Node launcher runs locally. For packaging, see below.
 
 ---
 
@@ -60,6 +64,30 @@ See **[docs/USAGE.md](docs/USAGE.md)** for:
 See **[docs/MODELS.md](docs/MODELS.md)** to choose and verify a model by RAM tier (Starter / Standard / Pro).
 
 ---
+
+## Packaging (single-file launcher)
+
+We ship a one-file launcher via Node SEA (no install). The binary does not include model weights or llama-server; put those next to the launcher on the USB.
+
+Quick build (macOS example):
+
+```bash
+# from repo root
+npm install
+npm run -w apps/launcher pack:sea:mac
+./apps/launcher/build/usb-llm-launcher
+curl http://127.0.0.1:17872/healthz
+```
+
+Windows (run on Windows):
+
+```powershell
+npm install
+npm run -w apps/launcher pack:sea:win
+.\apps\launcher\build\usb-llm-launcher.exe
+```
+
+see **[docs/PACKAGING.md](docs/PACKAGING.md)** for more details.
 
 ## Versioning
 

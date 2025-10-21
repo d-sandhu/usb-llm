@@ -3,7 +3,23 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { LauncherConfig } from './config.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Runtime-safe current file directory for both ESM (dev) and CJS (SEA) without using
+// `import.meta` at compile time (TS disallows it for CommonJS builds).
+const HERE: string = (() => {
+  // CJS (SEA build) path
+  if (typeof __dirname === 'string') return __dirname;
+
+  // ESM path: access `import.meta.url` only at runtime via Function()
+  try {
+    const metaUrl = Function('return import.meta && import.meta.url')();
+    if (typeof metaUrl === 'string') {
+      return path.dirname(fileURLToPath(metaUrl));
+    }
+  } catch {
+    // ignore; fall through to cwd
+  }
+  return process.cwd();
+})();
 
 export type ModelRegistryEntry = {
   id: string;
@@ -32,7 +48,7 @@ export type ResolvedModel = {
 async function readRegistryJson(): Promise<ModelRegistryEntry[]> {
   const candidates = [
     path.resolve(process.cwd(), 'models', 'registry.json'),
-    path.resolve(__dirname, '../../..', 'models', 'registry.json'), // when running from dist
+    path.resolve(HERE, '../../..', 'models', 'registry.json'), // when running from dist / dist-sea
   ];
   for (const p of candidates) {
     try {
