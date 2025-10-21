@@ -21,8 +21,10 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "models:add": "node scripts/model-helper.mjs add",
+    "models:list": "node scripts/model-helper.mjs list",
     "models:verify": "node scripts/verify-model.mjs",
-    "models:help": "node -e \"console.log('Usage: npm run models:verify -- <path/to/model.gguf>')\"",
+    "models:help": "node scripts/model-helper.mjs --help",
     "golden": "node packages/golden/golden.mjs"
   },
   "description": "USB-LLM is a plug-and-play offline email-drafting assistant that runs from a USB stick on Windows & macOS. No install. No cloud. v0.1 focuses on Reply, Compose, and Rewrite with tone/length presets and one-click copy.",
