@@ -46,7 +46,7 @@ The launcher accepts **structured fields** for all modes:
 
 ```json
 {
-  "flow": "compose" | "reply" | "rewrite",
+  "flow": "compose" | "reply" | "rewrite" | "grammar",
   "tone": "neutral" | "friendly" | "formal" | "concise" | "enthusiastic" | "apologetic",
   "length": "short" | "medium" | "long",
   "subject": "optional subject line or null",
@@ -181,7 +181,7 @@ curl -N -H "Content-Type: application/json" \
   http://127.0.0.1:17872/api/stream
 ```
 
-You’ll see:
+You'll see:
 
 ```
 event: meta
@@ -192,6 +192,50 @@ data: {"source":"supervisor","status":"ready","url":"http://127.0.0.1:8080"}
 ```
 
 Go back to **Stub** by unsetting the variables you set above.
+
+---
+
+## Grammar Check Flow
+
+USB-LLM includes a grammar checking flow that preserves your writing style while suggesting corrections.
+
+**How it works:**
+
+1. Select "Check Grammar" from the Flow dropdown in the UI
+2. Paste your email text
+3. Click Generate
+4. Get corrections or "No issues found"
+
+**Example curl:**
+
+```bash
+curl -N -X POST http://127.0.0.1:17872/api/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "flow": "grammar",
+    "tone": "formal",
+    "length": "medium",
+    "context": "I wanted to reach out and see if your availible for a quick call tommorrow?"
+  }'
+```
+
+**Note:** Tone and length are ignored in grammar mode. The system preserves your original text and only suggests corrections for errors.
+
+**Typical output (with real model):**
+
+```
+Issues found:
+
+1. "your availible" → "you're available" (contraction + spelling)
+2. "tommorrow" → "tomorrow" (spelling)
+
+Corrected version:
+"I wanted to reach out and see if you're available for a quick call tomorrow?"
+```
+
+If no issues are found, the response will be: `"No issues found. Your text looks good!"`
+
+**Stub mode:** In stub mode, grammar check will return placeholder text. Use a real model for actual grammar checking.
 
 ---
 
@@ -221,4 +265,4 @@ Go back to **Stub** by unsetting the variables you set above.
 - **macOS blocked binary?** `xattr -dr com.apple.quarantine <bin>; chmod +x <bin>`.
 - **Model too large / slow?** Pick a smaller `.gguf` (see `MODELS.md`).
 
-> Note: optional flags are only passed if set; if your local llama build doesn’t support them, just don’t set them.
+> Note: optional flags are only passed if set; if your local llama build doesn't support them, just don't set them.
