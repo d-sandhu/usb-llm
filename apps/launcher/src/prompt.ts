@@ -1,10 +1,8 @@
 // Small builder to derive system + user prompts from flow/tone/length.
 // Keep it minimal and predictable.
-
-export type Flow = 'reply' | 'compose' | 'rewrite';
+export type Flow = 'reply' | 'compose' | 'rewrite' | 'grammar';
 export type Tone = 'neutral' | 'friendly' | 'formal' | 'concise' | 'enthusiastic' | 'apologetic';
 export type Length = 'short' | 'medium' | 'long';
-
 export type BuildArgs = {
   flow: Flow;
   tone: Tone;
@@ -13,7 +11,6 @@ export type BuildArgs = {
   context?: string | null; // original email / thread / text
   instructions?: string | null; // user intent for this draft
 };
-
 function toneLine(t: Tone): string {
   switch (t) {
     case 'friendly':
@@ -30,7 +27,6 @@ function toneLine(t: Tone): string {
       return 'Tone: neutral, straightforward, and professional.';
   }
 }
-
 function lengthLine(l: Length): string {
   switch (l) {
     case 'short':
@@ -41,7 +37,6 @@ function lengthLine(l: Length): string {
       return 'Length: medium (5–8 sentences).';
   }
 }
-
 export function buildEmailPrompts(a: BuildArgs): { system: string; user: string } {
   const tone = toneLine(a.tone);
   const length = lengthLine(a.length);
@@ -49,7 +44,25 @@ export function buildEmailPrompts(a: BuildArgs): { system: string; user: string 
   const context = a.context?.trim() ? a.context.trim() : null;
   const instructions = a.instructions?.trim() ? a.instructions.trim() : null;
 
-  // shared system guidance
+  if (a.flow === 'grammar') {
+    // Grammar check: preserve voice, only fix errors
+    const system = [
+      'You are a grammar, spelling, and clarity assistant.',
+      "Check the text for errors but preserve the author's voice and style.",
+      'If there are issues, list them briefly with suggestions.',
+      'If the text is already correct, respond with "No issues found."',
+    ].join(' ');
+
+    const user = [
+      'Check this text for grammar, spelling, and clarity issues:',
+      '',
+      context ?? '(no text provided)',
+    ].join('\n');
+
+    return { system, user };
+  }
+
+  // shared system guidance for other flows
   const system = [
     'You are a concise business email assistant.',
     'Write clear, polite, and action-oriented emails.',

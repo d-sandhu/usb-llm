@@ -48,6 +48,17 @@ and follows [Semantic Versioning](https://semver.org/).
 - `scripts/model-helper.mjs`: CLI to add/list models with SHA-256 verification.
 - Root scripts: `models:add`, `models:list`, `models:help`.
 - Improved model setup workflow in `docs/MODELS.md` with helper commands and testing instructions.
+- UI: "Check Grammar" flow for grammar and spelling checks without changing writing style.
+- Launcher: Grammar flow prompt template that preserves user's voice.
+- UI: Accessibility improvements (ARIA labels, descriptions, keyboard navigation hints).
+- UI: Enhanced focus states with visible outlines and box-shadows.
+- UI: Support for high contrast mode and reduced motion preferences.
+- UI: Screen reader support with sr-only descriptions.
+- UI: Info banner when grammar mode is selected.
+- UI: Dynamic input labels based on selected flow.
+- UI: Form validation with helpful error messages.
+- UI: Footer with keyboard shortcut hints.
+- `docs/USAGE.md`: Grammar check flow documentation with examples.
 
 ### Changed
 
@@ -67,3 +78,5 @@ and follows [Semantic Versioning](https://semver.org/).
 - Packaging: SEA config now correctly bundles the launcher into a single `.cjs` file before embedding.
 - `README.md`: updated models section to reference `models:add` and golden tasks workflow.
 - `docs/MODELS.md`: complete rewrite with model helper CLI workflow, testing instructions, and troubleshooting.
+- `apps/launcher/src/prompt.ts`: Added grammar flow logic, tone/length ignored in grammar mode.
+- `docs/USAGE.md`: Added grammar flow to request body structured fields, added Grammar Check Flow section.

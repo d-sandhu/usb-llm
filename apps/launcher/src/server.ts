@@ -28,6 +28,11 @@ function setSecurityHeaders(res: http.ServerResponse) {
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   res.setHeader('Permissions-Policy', '');
+
+  // CORS for dev
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
 async function readJson<T = JsonDict>(req: http.IncomingMessage): Promise<T> {
@@ -87,6 +92,13 @@ const server = http.createServer(async (req, res) => {
       return void res.end('Bad Request');
     }
     const url = new URL(req.url, `http://${HOST}`);
+
+    // CORS preflight
+    if (req.method === 'OPTIONS') {
+      setSecurityHeaders(res);
+      res.statusCode = 204;
+      return void res.end();
+    }
 
     // health (safe: defaults to stub if no model/upstream)
     if (req.method === 'GET' && url.pathname === '/healthz') {
@@ -318,7 +330,7 @@ function toStructuredArgs(body: Record<string, unknown>): {
 
   if (!f && !t && !l && !subject && !context && !instructions) return null;
 
-  const flow: Flow | null = isOneOf<Flow>(f, ['reply', 'compose', 'rewrite']);
+  const flow: Flow | null = isOneOf<Flow>(f, ['reply', 'compose', 'rewrite', 'grammar']);
   const tone: Tone | null = isOneOf<Tone>(t, [
     'neutral',
     'friendly',
@@ -350,7 +362,7 @@ function streamStub(
 ) {
   sseEvent(res, 'meta', { source: 'stub', started_at: new Date().toISOString() });
   const draft =
-    `Hello,\n\nThanks for your note. Here’s a short first draft based on your request:\n\n` +
+    `Hello,\n\nThanks for your note. Here's a short first draft based on your request:\n\n` +
     prompt.slice(0, 200) +
     `\n\nBest regards,\nUSB-LLM`;
   const chunks = tokenizeForDemo(draft, maxTokens ?? 120);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-type Flow = 'reply' | 'compose' | 'rewrite';
+type Flow = 'reply' | 'compose' | 'rewrite' | 'grammar';
 type Tone = 'neutral' | 'friendly' | 'formal' | 'concise' | 'enthusiastic' | 'apologetic';
 type Length = 'short' | 'medium' | 'long';
 
@@ -153,7 +153,7 @@ function App() {
   function canSubmit(): boolean {
     // Need something to work with:
     // - compose: instructions or context
-    // - reply/rewrite: context OR (instructions if you really want a blank rewrite/reply)
+    // - reply/rewrite/grammar: context OR (instructions if you really want a blank)
     if (flow === 'compose') return Boolean(instructions.trim() || context.trim());
     return Boolean(context.trim() || instructions.trim());
   }
@@ -282,7 +282,7 @@ function App() {
 
       {/* Flow selector */}
       <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
-        {(['reply', 'compose', 'rewrite'] as Flow[]).map((f) => (
+        {(['reply', 'compose', 'rewrite', 'grammar'] as Flow[]).map((f) => (
           <button
             key={f}
             type="button"
@@ -299,10 +299,12 @@ function App() {
                 ? 'Reply to an incoming email'
                 : f === 'compose'
                   ? 'Compose a new email'
-                  : 'Rewrite an existing email'
+                  : f === 'rewrite'
+                    ? 'Rewrite an existing email'
+                    : 'Check grammar and spelling'
             }
           >
-            {f[0].toUpperCase() + f.slice(1)}
+            {f === 'grammar' ? 'Check Grammar' : f[0].toUpperCase() + f.slice(1)}
           </button>
         ))}
       </div>
@@ -368,10 +370,14 @@ function App() {
         />
 
         {/* Context / Original */}
-        {(flow === 'reply' || flow === 'rewrite') && (
+        {(flow === 'reply' || flow === 'rewrite' || flow === 'grammar') && (
           <>
             <label style={labelStyle}>
-              {flow === 'reply' ? 'Original email / thread' : 'Original text to rewrite'}
+              {flow === 'reply'
+                ? 'Original email / thread'
+                : flow === 'rewrite'
+                  ? 'Original text to rewrite'
+                  : 'Text to check'}
             </label>
             <textarea
               value={context}
@@ -381,7 +387,9 @@ function App() {
               placeholder={
                 flow === 'reply'
                   ? 'Paste the incoming email or thread here…'
-                  : 'Paste the text you want rewritten…'
+                  : flow === 'rewrite'
+                    ? 'Paste the text you want rewritten…'
+                    : 'Paste your email text here for grammar check…'
               }
               style={{
                 width: '100%',
@@ -400,7 +408,9 @@ function App() {
             ? 'What should the email say?'
             : flow === 'reply'
               ? 'Any extra guidance for the reply? (optional)'
-              : 'Rewrite guidance (optional)'}
+              : flow === 'rewrite'
+                ? 'Rewrite guidance (optional)'
+                : 'Extra guidance for grammar check (optional)'}
         </label>
         <textarea
           value={instructions}
@@ -412,7 +422,9 @@ function App() {
               ? 'Keep it friendly and ask for a 20-minute sync next week about the Q3 numbers.'
               : flow === 'reply'
                 ? 'Acknowledge their delay, confirm the new deadline, and ask for the updated deck.'
-                : 'Make it friendlier and shorter while preserving key details.'
+                : flow === 'rewrite'
+                  ? 'Make it friendlier and shorter while preserving key details.'
+                  : 'Focus on specific grammar issues if needed…'
           }
           style={{ width: '100%', padding: 12, fontSize: 14, resize: 'vertical' }}
         />
