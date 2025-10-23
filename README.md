@@ -6,6 +6,14 @@ USB-LLM is a plug-and-play **offline** email-drafting assistant that runs from a
 
 ---
 
+> **Note (for developers):** This README is developer-focused. For end-user instructions, see:
+>
+> - `docs/END_USER_GUIDE.md` — non-technical, step-by-step
+> - `docs/USB_LAYOUT.md` — USB/Desktop layout & start scripts
+> - `docs/PACKAGING.md` and `docs/MODELS.md` — advanced details
+
+---
+
 ## Platforms (v0.1)
 
 - Windows portable `.exe`
