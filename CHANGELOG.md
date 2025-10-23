@@ -55,10 +55,15 @@ and follows [Semantic Versioning](https://semver.org/).
 - UI: Support for high contrast mode and reduced motion preferences.
 - UI: Screen reader support with sr-only descriptions.
 - UI: Info banner when grammar mode is selected.
-- UI: Dynamic input labels based on selected flow.
+- UI: Dynamic input labels based on selected fßlow.
 - UI: Form validation with helpful error messages.
 - UI: Footer with keyboard shortcut hints.
 - `docs/USAGE.md`: Grammar check flow documentation with examples.
+- Docs: Added `docs/USB_LAYOUT.md` (canonical USB/Desktop layout & start scripts).
+- Docs: Added `docs/END_USER_GUIDE.md` (non-technical user guide).
+- Docs: Added `docs/RELEASE_CHECKLIST.md` (repeatable release steps).
+- README: Clarified developer focus and linked to end-user docs.
+- Scripts: Added `scripts/start-macos.command.template` and `scripts/start-windows.bat.template`.
 
 ### Changed
 

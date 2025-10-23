@@ -1,0 +1,19 @@
+@echo off
+setlocal enabledelayedexpansion
+cd /d "%~dp0"
+
+REM --- Autostart configuration ---
+set USBLLM_AUTOSTART=1
+set USBLLM_LLAMA_BIN=%CD%\llama\llama-server.exe
+
+REM Use a registry ID (see models/registry.json and docs/MODELS.md)
+set USBLLM_MODEL_ID=starter-phi3-mini-q4_k_m
+set USBLLM_MODELS_DIR=%CD%\models
+
+REM Optional tuning
+set USBLLM_THREADS=6
+set USBLLM_CTX_SIZE=4096
+set USBLLM_LOG_DISABLE=1
+
+REM Launch
+"%CD%\usb-llm-launcher.exe"
